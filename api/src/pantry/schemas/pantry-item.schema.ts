@@ -1,11 +1,30 @@
-// TODO: Add @Schema/@Prop decorators, SchemaFactory and module registration.
-// Numeric application IDs link collections; no ObjectId references or populate.
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { HydratedDocument } from "mongoose";
+import { isDateOnly } from "../dto/validation";
+
+@Schema({ collection: "pantry_items", versionKey: false })
 export class PantryItem {
-id: number;
-name: string;
-categoryId: number;
-quantity: number;
-unit: string;
-minimumQuantity: number;
-expiryDate?: string;
+  @Prop({
+    required: true,
+    unique: true,
+    min: 1,
+    validate: Number.isSafeInteger,
+  })
+  id: number;
+  @Prop({ required: true, trim: true }) name: string;
+  @Prop({ required: true, unique: true }) normalizedName: string;
+  @Prop({ required: true, min: 1, validate: Number.isSafeInteger })
+  categoryId: number;
+  @Prop({ required: true, min: 0, validate: Number.isFinite }) quantity: number;
+  @Prop({ required: true, trim: true }) unit: string;
+  @Prop({ required: true, min: 0, validate: Number.isFinite })
+  minimumQuantity: number;
+  @Prop({
+    type: String,
+    default: null,
+    validate: (value: unknown) => value === null || isDateOnly(value),
+  })
+  expiryDate: string | null;
 }
+export type PantryItemDocument = HydratedDocument<PantryItem>;
+export const PantryItemSchema = SchemaFactory.createForClass(PantryItem);
