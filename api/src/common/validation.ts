@@ -4,7 +4,10 @@ import { apiError } from './errors/api-error';
 
 export function createValidationPipe(): ValidationPipe {
   return new ValidationPipe({
-    transform: true, whitelist: true, forbidNonWhitelisted: true, forbidUnknownValues: true,
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    forbidUnknownValues: true,
     exceptionFactory: (errors: ValidationError[]) => {
       const fields: Record<string, string[]> = {};
       const visit = (error: ValidationError, prefix = '') => {
@@ -13,7 +16,12 @@ export function createValidationPipe(): ValidationPipe {
         error.children?.forEach((child) => visit(child, path));
       };
       errors.forEach((error) => visit(error));
-      return apiError(400, 'VALIDATION_ERROR', 'Please correct the invalid fields.', fields);
+      return apiError(
+        400,
+        'VALIDATION_ERROR',
+        'Please correct the invalid fields.',
+        fields,
+      );
     },
   });
 }

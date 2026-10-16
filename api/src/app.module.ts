@@ -17,7 +17,11 @@ import { SeedModule } from './database/seed.module';
         serverSelectionTimeoutMS: 5000,
       }),
     }),
-    CategoriesModule, PantryModule, ShoppingListModule, DashboardModule, SeedModule,
+    CategoriesModule,
+    PantryModule,
+    ShoppingListModule,
+    DashboardModule,
+    SeedModule,
   ],
 })
 export class AppModule {}

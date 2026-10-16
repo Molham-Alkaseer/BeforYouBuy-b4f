@@ -1,0 +1,108 @@
+{
+  "measuredAt": "2026-10-16T22:14:44.117Z",
+  "database": "Disposable fixture database, 20 pantry items",
+  "scope": "Representative stored-field query from the plan. Mustafa has not implemented the actual query yet.",
+  "query": {
+    "categoryId": 1
+  },
+  "sort": {
+    "expiryDate": 1
+  },
+  "before": {
+    "returned": 6,
+    "keysExamined": 0,
+    "documentsExamined": 20,
+    "executionTimeMs": 1,
+    "winningPlan": {
+      "isCached": false,
+      "stage": "SORT",
+      "sortPattern": {
+        "expiryDate": 1
+      },
+      "memLimit": 104857600,
+      "type": "simple",
+      "inputStage": {
+        "stage": "COLLSCAN",
+        "filter": {
+          "categoryId": {
+            "$eq": 1
+          }
+        },
+        "direction": "forward"
+      }
+    }
+  },
+  "after": {
+    "returned": 6,
+    "keysExamined": 6,
+    "documentsExamined": 6,
+    "executionTimeMs": 14,
+    "winningPlan": {
+      "isCached": false,
+      "stage": "FETCH",
+      "inputStage": {
+        "stage": "IXSCAN",
+        "keyPattern": {
+          "categoryId": 1,
+          "expiryDate": 1
+        },
+        "indexName": "category_expiry_candidate",
+        "isMultiKey": false,
+        "multiKeyPaths": {
+          "categoryId": [],
+          "expiryDate": []
+        },
+        "isUnique": false,
+        "isSparse": false,
+        "isPartial": false,
+        "indexVersion": 2,
+        "direction": "forward",
+        "indexBounds": {
+          "categoryId": [
+            "[1, 1]"
+          ],
+          "expiryDate": [
+            "[MinKey, MaxKey]"
+          ]
+        }
+      }
+    }
+  },
+  "hinted": {
+    "returned": 6,
+    "keysExamined": 6,
+    "documentsExamined": 6,
+    "executionTimeMs": 0,
+    "winningPlan": {
+      "isCached": false,
+      "stage": "FETCH",
+      "inputStage": {
+        "stage": "IXSCAN",
+        "keyPattern": {
+          "categoryId": 1,
+          "expiryDate": 1
+        },
+        "indexName": "category_expiry_candidate",
+        "isMultiKey": false,
+        "multiKeyPaths": {
+          "categoryId": [],
+          "expiryDate": []
+        },
+        "isUnique": false,
+        "isSparse": false,
+        "isPartial": false,
+        "indexVersion": 2,
+        "direction": "forward",
+        "indexBounds": {
+          "categoryId": [
+            "[1, 1]"
+          ],
+          "expiryDate": [
+            "[MinKey, MaxKey]"
+          ]
+        }
+      }
+    }
+  },
+  "decision": "Do not add a production performance index yet. Repeat on Mustafa's implemented query and representative data. No speedup claim from millisecond-rounded timing on 20 records."
+}

@@ -1,11 +1,11 @@
 // TODO: Add @Schema/@Prop decorators, SchemaFactory and module registration.
 // Numeric application IDs link collections; no ObjectId references or populate.
-import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import { Document } from "mongoose";
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
 
 export type CategoryDocument = Category & Document;
 
-@Schema({ collection: "categories" })
+@Schema({ collection: 'categories' })
 export class Category {
   @Prop({ required: true, unique: true, min: 1 })
   id: number;

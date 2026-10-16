@@ -10,8 +10,14 @@ export class NoFieldsPipe implements PipeTransform {
     }
     const keys = Object.keys(value);
     if (keys.length) {
-      throw apiError(400, 'VALIDATION_ERROR', `This endpoint accepts no ${this.location} fields.`,
-        Object.fromEntries(keys.map((key) => [key, ['This field is not allowed.']])));
+      throw apiError(
+        400,
+        'VALIDATION_ERROR',
+        `This endpoint accepts no ${this.location} fields.`,
+        Object.fromEntries(
+          keys.map((key) => [key, ['This field is not allowed.']]),
+        ),
+      );
     }
     return value;
   }

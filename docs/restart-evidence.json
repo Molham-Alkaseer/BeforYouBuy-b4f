@@ -1,0 +1,7 @@
+{
+  "measuredAt": "2026-10-16T22:18:23.180Z",
+  "result": "PASS",
+  "verification": "Persisted a marker, gracefully shut down the task-owned mongod, restarted it from the same data directory, and verified the unchanged marker.",
+  "database": "byb_test_restart_32996",
+  "existingWindowsService": "Not modified; test instance uses port 27018."
+}

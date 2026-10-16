@@ -9,8 +9,11 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
   app.useGlobalPipes(createValidationPipe());
   app.useGlobalFilters(new AllExceptionsFilter());
-  const config = new DocumentBuilder().setTitle('Before You Buy API')
-    .setDescription('Household pantry API').setVersion('1.0').build();
+  const config = new DocumentBuilder()
+    .setTitle('Before You Buy API')
+    .setDescription('Household pantry API')
+    .setVersion('1.0')
+    .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
   await app.listen(process.env.PORT ?? 3000);
 }
