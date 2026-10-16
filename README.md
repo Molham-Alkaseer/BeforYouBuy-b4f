@@ -1,64 +1,129 @@
 # Before You Buy
-Household pantry assistant for managing groceries, expiry dates and shopping lists.
 
-## Current scope
-This repository is a **file-structure starter**, not a completed application. React navigation and page placeholders are wired. NestJS bootstrap, MongoDB configuration, validation, Swagger, the exception filter and internal-tool guard are set up. Resource modules, controllers, services, DTOs, schema outlines and seed files mark where the team implements the requirements. Resource endpoints, persistence models, business rules, demo seeding and integration are still TODO.
+Household pantry assistant built with React, NestJS and MongoDB.
 
-## Structure
-```text
-frontend/                     React + TypeScript + Vite (from React/Node class setup)
-  src/
-    main.tsx, App.tsx          Entry point and routes
-    api.ts, types.ts           HTTP helper and proposed response types
-    components/               Navigation and loading/error/empty messages
-    pages/                    Dashboard, Pantry, ItemForm, ItemDetails, ShoppingList, NotFound
-backend/                      NestJS (based on the supplied api folder)
-  src/
-    main.ts, app.module.ts    Bootstrap, validation, Swagger and MongoDB connection
-    common/filters/            Supplied exception filter
-    common/guards/             Supplied InternalToolGuard
-    categories/               Module, controller, service, dto/, schemas/
-    pantry/                   Module, controller, service, dto/, schemas/, status helper
-    shopping-list/            Module, controller, service, dto/, schemas/
-    dashboard/                Module, controller, service
-    database/seed.ts          Demo-data implementation task
-  test/                       Acceptance-test plan and Jest e2e config
- docs/api-plan.md             Planned routes and responsibilities
-```
+## Current status
 
-## Install and run
-Use Node.js 20+ and a local MongoDB instance. Run each app in its own terminal.
+Molham's category endpoints, shared validation/errors, Damascus clock, numeric IDs, transaction helper and atomic demo seed are implemented. Pantry, shopping and dashboard code in this checkout remains a scaffold. The frontend pages are also placeholders. A successful build does not mean the entire application is finished.
+
+See [Molham's implementation guide](docs/molham-super.md), [integration results](docs/integration-results.md), and the authoritative [API contract v1](Tasks/apicontract.md).
+
+## Folders
+
+- `client/`: React, TypeScript and Vite.
+- `api/`: NestJS API, shared infrastructure and tests.
+- `Tasks/`: team assignments, contract and mock fixture.
+- `docs/`: integration handoff, database evidence and explanations.
+
+## Install and run on Windows
+
+Use Node.js 20+ and MongoDB Server with replica-set support. The supplied script defaults to MongoDB 8.0's Windows installation path; pass `-MongoExe` if yours differs.
+
+From the repository root:
 
 ```powershell
-cd frontend
+cd api
 npm install
-Copy-Item .env.example .env
-npm run dev
+npm run db:start
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
+Edit `api/.env`:
+
+```dotenv
+PORT=3000
+MONGODB_URI=mongodb://127.0.0.1:27018/before_you_buy?replicaSet=byb-rs
+INTERNAL_TOOL_KEY=replace-with-a-local-secret
+SEED_ON_START=true
+```
+
+Then, inside `api/`:
+
 ```powershell
-cd backend
-npm install
-Copy-Item .env.example .env
-# Edit .env and set your local INTERNAL_TOOL_KEY and MongoDB URI.
 npm run start:dev
 ```
 
-Frontend: http://localhost:5173. Backend base: http://localhost:3000/api. Swagger: http://localhost:3000/docs (no resource operations until controllers are implemented).
-Vite proxies `/api` to port 3000. Keep the proxy aligned if the backend port changes. Frontend `VITE_API_URL` defaults to `/api`; backend uses `PORT`, `MONGODB_URI`, and `INTERNAL_TOOL_KEY`. Never expose the internal key through Vite variables.
+In a second terminal, from the repository root:
 
-Build each app with `npm run build` from its directory. Frontend lint: `npm run lint`. Backend tests can be run after tests are implemented.
+```powershell
+cd client
+npm install
+npm run dev
+```
 
-## Data design decisions to implement
-- Relationship plan: separate categories, pantry items and shopping entries, linked by numeric application-level IDs. This keeps category names centralized and retains purchase history separately from current stock. Do not use ObjectId references or populate. Schema decorators, model registration and ID allocation are not implemented yet.
-- Index decision: pending real measurement. After persistence is implemented, measure a stored-field query such as `find({ categoryId: 1 }).sort({ expiryDate: 1 }).explain('executionStats')`. Record results before deciding whether a compound index is justified, then measure again. Do not claim an improvement without evidence or index calculated status labels.
+Frontend: http://localhost:5173. API: http://localhost:3000/api. Swagger: http://localhost:3000/docs.
 
-## Suggested implementation order
-1. Category/pantry schemas, validated DTOs, numeric IDs and seed data.
-2. Pantry CRUD, use action, combined filters and derived statuses/reasons.
-3. Shopping generation, manual entries, purchases, history and deletion rules.
-4. Dashboard calculations and Swagger descriptions for all routes.
-5. Replace frontend placeholders with forms and API-backed screens.
-6. Verify PDF acceptance flows, persistence after restart and index measurements.
+The local database script starts a localhost-only replica set named `byb-rs` on port 27018. Data lives in ignored `api/.local/mongo-rs`. The existing standalone MongoDB Windows service on port 27017 is untouched. Keep the data directory to preserve your work. Restart the API after changing its environment file.
 
-No accounts, payments, external services or deployment are included. Category mutation controls belong to internal tooling, not the normal frontend.
+A standalone MongoDB connection can support reads, but transactional mutations require the replica set. Never silently fall back to nontransactional writes.
+
+## Category API
+
+| Method | Route | Success | Access |
+| --- | --- | --- | --- |
+| GET | /api/categories | 200 `{ items: [{ id, name }] }` | Public |
+| POST | /api/categories | 201 `{ id, name }` | Internal key |
+| PATCH | /api/categories/:id | 200 `{ id, name }` | Internal key |
+| DELETE | /api/categories/:id | 204, no body | Internal key |
+
+POST/PATCH accept only `{ "name": "Dairy" }`. Names are trimmed and compared case-insensitively for uniqueness. Blank names, wrong types, unknown body/query fields, empty PATCH and invalid numeric IDs are rejected. A category used by a pantry item cannot be deleted.
+
+Use the `x-internal-tool-key` header for mutations only. The internal key belongs in the backend environment and internal tools, never the frontend. See [HTTP examples](docs/categories.http).
+
+Every error is `{ statusCode, code, message, fieldErrors }`. Internal failures return generic text; logs record a safe error type without raw requests, credentials or database errors.
+
+## Database design and concurrency
+
+Separate `categories`, `pantry_items` and `shopping_entries` collections use numeric application IDs as relationships. MongoDB's internal `_id` is not part of the API. There is no populate or aggregation pipeline. Purchased records must retain snapshots after pantry edits/deletion; implementation of that business behavior belongs to Allaith.
+
+`IdsService.next(collection)` uses durable counters and atomic increments. It reconciles existing IDs, never lowers counters and never reuses deleted IDs. Failed operations may consume IDs.
+
+`WriteService.run(callback)` uses a MongoDB transaction and a shared write-fence document. Every cooperating domain mutation must use it and pass the same session to ALL reads/writes. This prevents partial stock/history updates and reference-check/delete races. See [the required integration protocol](docs/write-consistency.md). The unfinished pantry/shopping code is not yet integrated with this helper.
+
+`DatabaseModule` imports the owners' schema files without importing domain modules/services. It registers each schema when the owner exports it. Missing schemas produce an explicit startup warning. This preserves independent category development without fabricating teammate implementations.
+
+## Seed and dates
+
+`SEED_ON_START=true` runs the seed after module initialization. False/absent disables automatic seeding. Only an empty application database gets demo data: 7 categories and 20 pantry items. Existing application records or a completed seed marker prevent reseeding.
+
+All inserts, counter initialization and the completion marker commit together. A failure rolls everything back. Relative expiry offsets use the current household date, so the demo remains useful on future days. The seed gives 5 LOW STOCK, 3 USE SOON, 2 EXPIRED and 12 OK items; statuses can overlap. These labels are checked in tests, not stored in MongoDB.
+
+ClockService.today() uses Asia/Damascus and returns YYYY-MM-DD. ClockService.now() returns an instant; timestamp responses use ISO UTC. Expiry remains a calendar string or null.
+
+Shopping/history demo records are optional and are not seeded. Purchases are never replayed into stock.
+
+## Frontend transport and mock mode
+
+Vite proxies `/api` to port 3000. `VITE_API_URL=/api` is the normal client setting. The contract assigns `VITE_USE_MOCKS=true` to Mohammad's development adapter; that adapter is not implemented in this checkout. Setting the variable alone currently does not create a working mock. Normal category reads need no key.
+
+## Verification
+
+Start the local replica set first, then run from the repository root:
+
+```powershell
+npm --prefix api run build
+npm --prefix api test -- --runInBand
+npm --prefix api run test:unit
+npm --prefix client run build
+npm --prefix client run lint
+node api/scripts/measure-index.cjs
+node api/scripts/verify-db-restart.cjs
+```
+
+The integration suite uses disposable `byb_test_*` databases on port 27018 and removes them afterward. The unit command runs shared-foundation checks without MongoDB.
+
+The restart verification intentionally restarts only the task-created local replica set after verifying its exact data path and replica-set name. Run it when no other work is using that test instance.
+
+## Actual index measurements
+
+A representative `find({ categoryId: 1 }).sort({ expiryDate: 1 })` query was measured against the 20-item seed on 17 October 2026 (Asia/Damascus):
+
+| Run | Keys examined | Documents examined | Execution time |
+| --- | ---: | ---: | ---: |
+| Before candidate index | 0 | 20 | 1 ms |
+| After candidate index, optimizer selected it | 6 | 6 | 14 ms |
+| Explicitly hinted candidate | 6 | 6 | 0 ms |
+
+The candidate reduced examined documents but this tiny timing sample does not demonstrate a speedup. No production performance index was added. Mustafa's actual category/expiry query is still unimplemented; repeat the measurement after integration on representative data. Correctness indexes for unique IDs/names and Pending shopping constraints are separate.
+
+Raw plans: [index evidence](docs/index-evidence.json). Restart evidence: [database restart result](docs/restart-evidence.json).

@@ -1,4 +1,3 @@
-// TODO: Add @Schema/@Prop decorators, SchemaFactory and module registration.
 // Numeric application IDs link collections; no ObjectId references or populate.
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
