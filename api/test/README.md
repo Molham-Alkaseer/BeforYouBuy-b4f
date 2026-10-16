@@ -1,0 +1,1 @@
+Acceptance tests to implement: the eight demo scenarios in PDF section 17, plus validation, duplicate names, combined filters, category deletion conflicts and persistence. No tests have been implemented in this scaffold.

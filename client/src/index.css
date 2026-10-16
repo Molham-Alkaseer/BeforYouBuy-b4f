@@ -1,0 +1,1 @@
+body { margin: 0; font-family: system-ui, sans-serif; color: #23352d; background: #f6f8f5; } nav { display: flex; flex-wrap: wrap; gap: 1.5rem; padding: 1.5rem; background: white; } a { color: #236147; } main { max-width: 960px; margin: 3rem auto; padding: 0 1.5rem; } .notice { padding: 1rem; border: 1px solid #ccd8ce; border-radius: 8px; }
