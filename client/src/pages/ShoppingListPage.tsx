@@ -1,3 +1,398 @@
+import { useEffect, useState } from "react";
+import { api } from "../services/api-client";
+import { ShoppingList, ShoppingEntry } from "../types";
+import "./shopping-list.css";
+
 export default function ShoppingListPage() {
-  return <section><h1>Shopping list</h1><p>Show pending entries, generate, manual add, purchase and remove actions, plus purchased history.</p><p className="notice">Starter scaffold: this screen is not implemented yet.</p></section>;
+  const [pendingData, setPendingData] = useState<ShoppingList | null>(null);
+  const [purchasedData, setPurchasedData] = useState<ShoppingList | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const [manualName, setManualName] = useState("");
+  const [manualQty, setManualQty] = useState<number | "">("");
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+
+  const [purchasingItem, setPurchasingItem] = useState<ShoppingEntry | null>(
+    null,
+  );
+  const [purchaseQty, setPurchaseQty] = useState<number | "">("");
+  const [purchaseDate, setPurchaseDate] = useState<string>("");
+  const [purchaseErrors, setPurchaseErrors] = useState<
+    Record<string, string[]>
+  >({});
+  const [isPurchasing, setIsPurchasing] = useState(false);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [pending, purchased] = await Promise.all([
+        api.listShoppingEntries({ status: "Pending" }),
+        api.listShoppingEntries({ status: "Purchased" }),
+      ]);
+      setPendingData(pending);
+      setPurchasedData(purchased);
+    } catch (err: any) {
+      setError(err.message || "Failed to load shopping list");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      await api.generateShoppingList();
+      await loadData();
+    } catch (err: any) {
+      setError(err.message || "Failed to generate list");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleAddManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualName || manualQty === "") return;
+
+    setIsSubmittingManual(true);
+    setManualError(null);
+    try {
+      await api.createManualEntry({
+        name: manualName,
+        quantityToBuy: Number(manualQty),
+      });
+      setManualName("");
+      setManualQty("");
+      await loadData();
+    } catch (err: any) {
+      setManualError(err.fieldErrors?.name?.[0] || err.message);
+    } finally {
+      setIsSubmittingManual(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("Are you sure you want to remove this entry?")) return;
+    try {
+      if (purchasingItem?.id === id) setPurchasingItem(null);
+      await api.deleteShoppingEntry(id);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const openPurchasePanel = (item: ShoppingEntry) => {
+    setPurchasingItem(item);
+    setPurchaseQty(item.quantityToBuy);
+    setPurchaseDate("");
+    setPurchaseErrors({});
+  };
+
+  const handleConfirmPurchase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!purchasingItem || purchaseQty === "") return;
+
+    setIsPurchasing(true);
+    setPurchaseErrors({});
+    try {
+      await api.purchaseEntry(purchasingItem.id, {
+        purchasedQuantity: Number(purchaseQty),
+        newExpiryDate: purchaseDate || undefined,
+      });
+      setPurchasingItem(null);
+      await loadData();
+    } catch (err: any) {
+      if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        setPurchaseErrors(err.fieldErrors);
+      } else {
+        setPurchaseErrors({ general: [err.message] });
+      }
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const renderBadges = (statuses: string[]) => {
+    if (!statuses || statuses.length === 0) {
+      return (
+        <span className="shopping-badge shopping-badge-manual">
+          ADDED BY HAND
+        </span>
+      );
+    }
+    return statuses.map((status) => {
+      let badgeClass = "shopping-badge-ok";
+      if (status === "LOW STOCK") badgeClass = "shopping-badge-low";
+      if (status === "USE SOON") badgeClass = "shopping-badge-soon";
+      if (status === "EXPIRED") badgeClass = "shopping-badge-expired";
+      return (
+        <span key={status} className={`shopping-badge ${badgeClass}`}>
+          {status}
+        </span>
+      );
+    });
+  };
+
+  if (isLoading && !pendingData)
+    return <div className="shopping-loading">Loading shopping list...</div>;
+  if (error) return <div className="shopping-error">Error: {error}</div>;
+
+  const isExpired = purchasingItem?.pantryStatuses.includes("EXPIRED");
+
+  return (
+    <div className="shopping-page">
+      <div className="shopping-header">
+        <div>
+          <h1 className="shopping-title">Shopping list</h1>
+          <p className="shopping-subtitle">
+            {pendingData?.pendingSummary.total} pending entries · pressing
+            generate again never adds an item twice
+          </p>
+        </div>
+        <button
+          onClick={handleGenerate}
+          disabled={isGenerating}
+          className="shopping-btn-primary"
+        >
+          {isGenerating ? "Generating..." : "Generate shopping list"}
+        </button>
+      </div>
+
+      <section className="shopping-panel">
+        <div className="shopping-panel-header">
+          <h2 className="shopping-panel-title">Pending</h2>
+          <p className="shopping-panel-desc">
+            Suggested amounts bring each item back to its minimum. Expired stock
+            counts as zero.
+          </p>
+        </div>
+        <div className="shopping-list">
+          {pendingData?.items.map((item) => (
+            <div key={item.id} className="shopping-list-item">
+              <div className="shopping-item-info">
+                <h3 className="shopping-item-name">{item.name}</h3>
+                <p className="shopping-item-meta">
+                  {item.pantryItemId ? "From your pantry" : "Not a pantry item"}{" "}
+                  · created {formatDate(item.createdAt)}
+                </p>
+              </div>
+              <div className="shopping-item-qty">
+                <span>
+                  Buy {item.quantityToBuy} {item.unit || ""}
+                </span>
+                <span className="shopping-badges-container">
+                  {renderBadges(item.pantryStatuses)}
+                </span>
+              </div>
+              <div className="shopping-item-actions">
+                <button
+                  onClick={() => openPurchasePanel(item)}
+                  className="shopping-btn-primary shopping-btn-small"
+                >
+                  Mark purchased
+                </button>
+                <button
+                  onClick={() => handleDelete(item.id)}
+                  className="shopping-btn-link shopping-btn-remove"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+          {pendingData?.items.length === 0 && (
+            <div className="shopping-empty">No pending items.</div>
+          )}
+        </div>
+      </section>
+
+      <div className="shopping-grid">
+        <section className="shopping-panel shopping-manual-panel">
+          <h2 className="shopping-panel-title">Add your own entry</h2>
+          <p className="shopping-panel-desc">
+            For things that are not pantry items, like birthday candles.
+          </p>
+          <form onSubmit={handleAddManual} className="shopping-form">
+            <div className="shopping-form-row">
+              <div className="shopping-form-group shopping-flex-1">
+                <label>Name</label>
+                <input
+                  type="text"
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                  className="shopping-input"
+                  required
+                />
+              </div>
+              <div className="shopping-form-group shopping-w-sm">
+                <label>Quantity</label>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="any"
+                  value={manualQty}
+                  onChange={(e) =>
+                    setManualQty(e.target.value ? Number(e.target.value) : "")
+                  }
+                  className="shopping-input"
+                  required
+                />
+              </div>
+            </div>
+            {manualError && (
+              <p className="shopping-error-text">{manualError}</p>
+            )}
+            <button
+              type="submit"
+              disabled={isSubmittingManual}
+              className="shopping-btn-dark"
+            >
+              {isSubmittingManual ? "Adding..." : "Add to list"}
+            </button>
+          </form>
+        </section>
+
+        {purchasingItem && (
+          <section className="shopping-purchase-panel">
+            <h2 className="shopping-panel-title">
+              Mark {purchasingItem.name} as purchased
+            </h2>
+
+            {isExpired && (
+              <p className="shopping-purchase-warning">
+                The old {purchasingItem.name} is expired, so it is discarded.
+                The new quantity will be exactly what you bought.
+              </p>
+            )}
+
+            <form onSubmit={handleConfirmPurchase} className="shopping-form">
+              <div className="shopping-form-row">
+                <div className="shopping-form-group shopping-w-md">
+                  <label>Quantity bought</label>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="any"
+                    value={purchaseQty}
+                    onChange={(e) =>
+                      setPurchaseQty(
+                        e.target.value ? Number(e.target.value) : "",
+                      )
+                    }
+                    className={`shopping-input ${purchaseErrors.purchasedQuantity ? "shopping-input-error" : ""}`}
+                    required
+                  />
+                  {purchaseErrors.purchasedQuantity && (
+                    <p className="shopping-error-text">
+                      {purchaseErrors.purchasedQuantity[0]}
+                    </p>
+                  )}
+                </div>
+
+                {purchasingItem.pantryItemId !== null && (
+                  <div className="shopping-form-group shopping-flex-1">
+                    <label>New expiry date</label>
+                    <input
+                      type="date"
+                      value={purchaseDate}
+                      onChange={(e) => setPurchaseDate(e.target.value)}
+                      className={`shopping-input ${purchaseErrors.newExpiryDate ? "shopping-input-error" : ""}`}
+                    />
+                    {purchaseErrors.newExpiryDate && (
+                      <p className="shopping-error-text">
+                        {purchaseErrors.newExpiryDate[0]}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {purchaseErrors.general && (
+                <p className="shopping-error-text">
+                  {purchaseErrors.general[0]}
+                </p>
+              )}
+
+              <div className="shopping-form-actions">
+                <button
+                  type="submit"
+                  disabled={isPurchasing}
+                  className="shopping-btn-primary"
+                >
+                  {isPurchasing ? "Confirming..." : "Confirm purchase"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPurchasingItem(null)}
+                  className="shopping-btn-cancel"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+      </div>
+
+      <section className="shopping-panel">
+        <div className="shopping-panel-header">
+          <h2 className="shopping-panel-title">Purchased history</h2>
+          <p className="shopping-panel-desc">
+            Bought entries stay here with the day they were purchased
+          </p>
+        </div>
+        <table className="shopping-table">
+          <thead>
+            <tr>
+              <th>ENTRY</th>
+              <th>BOUGHT</th>
+              <th>CREATED</th>
+              <th>PURCHASED</th>
+            </tr>
+          </thead>
+          <tbody>
+            {purchasedData?.items.map((item) => (
+              <tr key={item.id}>
+                <td className="shopping-cell-bold">{item.name}</td>
+                <td>
+                  {item.purchasedQuantity} {item.unit || ""}
+                </td>
+                <td className="shopping-cell-meta">
+                  {formatDate(item.createdAt)}
+                </td>
+                <td className="shopping-cell-meta">
+                  {item.purchasedAt ? formatDate(item.purchasedAt) : "-"}
+                </td>
+              </tr>
+            ))}
+            {purchasedData?.items.length === 0 && (
+              <tr>
+                <td colSpan={4} className="shopping-empty">
+                  No purchase history.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  );
 }
