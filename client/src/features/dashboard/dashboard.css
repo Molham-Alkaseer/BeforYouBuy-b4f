@@ -1,0 +1,25 @@
+.dashboard-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.dashboard-count { display: block; font-size: 3.4rem; line-height: 1.2; margin: 12px 0; }
+.dashboard-stats p { margin: 0; color: var(--byb-muted); font-size: .9rem; }
+.dashboard-count-note { font-size: .8rem; color: var(--byb-muted); margin: 10px 0 26px; }
+.dashboard-columns { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 24px; align-items: start; }
+.dashboard-side { display: grid; gap: 24px; }
+.dashboard-urgent, .dashboard-categories { list-style: none; padding: 0; margin: 0; }
+.dashboard-urgent li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; padding: 20px 0; border-top: 1px solid var(--byb-border); align-items: center; }
+.dashboard-urgent a { color: var(--byb-text); font-weight: 700; text-decoration: none; }
+.dashboard-urgent a:hover { text-decoration: underline; }
+.dashboard-urgent small { display: block; color: var(--byb-muted); }
+.dashboard-urgent li > span { font-size: .85rem; }
+.dashboard-urgent .byb-badges { grid-column: 1 / -1; }
+.dashboard-page .dashboard-pending { background: var(--byb-primary); color: white; }
+.dashboard-pending h2 { font-size: 1rem; font-weight: 550; }
+.dashboard-pending p { font-size: .9rem; }
+.dashboard-pending .byb-button { background: white; color: var(--byb-primary); }
+.dashboard-categories li { margin-top: 18px; }
+.dashboard-categories li > div { display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; }
+.dashboard-categories meter { display: block; width: 100%; height: 10px; margin-top: 6px; border: 0; border-radius: 10px; background: var(--byb-sidebar); }
+.dashboard-categories meter::-webkit-meter-bar { background: var(--byb-sidebar); border: 0; height: 10px; }
+.dashboard-categories meter::-webkit-meter-optimum-value { background: var(--byb-primary); border-radius: 10px; }
+.dashboard-categories meter::-moz-meter-bar { background: var(--byb-primary); border-radius: 10px; }
+@media (max-width: 1100px) { .dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dashboard-columns { grid-template-columns: 1fr; } }
+@media (max-width: 400px) { .dashboard-stats { gap: 10px; } .dashboard-stats .byb-panel { padding: 16px; } .dashboard-urgent li { grid-template-columns: 1fr; } }
