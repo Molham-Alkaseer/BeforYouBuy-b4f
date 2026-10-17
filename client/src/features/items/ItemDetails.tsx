@@ -12,6 +12,7 @@ import RetryError from './RetryError';
 import ItemHistory from './ItemHistory';
 import UseItemForm from './UseItemForm';
 import DeleteItem from './DeleteItem';
+import './items.css';
 
 
 // The page is always in exactly one of these situations.
@@ -104,7 +105,7 @@ export default function ItemDetails() {
   const daysText = formatDaysUntil(item.daysUntilExpiry);
 
   return (
-    <section className="item-page">
+       <section className="item-page item-details-page">
       {backLink}
 
       <header className="item-header">

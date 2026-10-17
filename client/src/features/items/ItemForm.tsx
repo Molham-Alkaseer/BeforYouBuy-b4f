@@ -9,6 +9,7 @@ import type { Category, PantryItem } from './itemTypes';
 import { parseRouteId } from './parseRouteId';
 import RetryError from './RetryError';
 import ItemFormBody from './ItemFormBody';
+import './items.css';
 
 // The page is always in exactly one of these situations.
 type LoadState =

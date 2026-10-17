@@ -44,6 +44,7 @@ export function formatDaysUntil(days: number | null): string | null {
 
 // "2026-10-09T10:00:00.000Z" -> "9 Oct 2026".
 // The day is read in the household's timezone (Asia/Damascus), so it matches the server.
+// The month name comes from MONTHS, so it is always written the same way.
 export function formatTimestampDate(timestamp: string): string {
   const date = new Date(timestamp);
 
@@ -51,10 +52,23 @@ export function formatTimestampDate(timestamp: string): string {
     return timestamp;
   }
 
-  return date.toLocaleDateString('en-GB', {
+  const parts = new Intl.DateTimeFormat('en-US', {
     day: 'numeric',
-    month: 'short',
+    month: 'numeric',
     year: 'numeric',
     timeZone: 'Asia/Damascus',
-  });
+  }).formatToParts(date);
+
+  function read(type: Intl.DateTimeFormatPartTypes): number {
+    return Number(parts.find((part) => part.type === type)?.value);
+  }
+
+  const day = read('day');
+  const monthName = MONTHS[read('month') - 1];
+  const year = read('year');
+
+  if (!day || !monthName || !year) {
+    return timestamp;
+  }
+  return `${day} ${monthName} ${year}`;
 }
