@@ -17,6 +17,7 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { InternalToolGuard } from '../common/guards/internal-tool.guard';
 import { PositiveIdPipe } from '../common/pipes/positive-id.pipe';
 import { NoFieldsPipe } from '../common/pipes/no-fields.pipe';
+import { JsonObjectGuard } from '../common/guards/json-object.guard';
 
 const INTERNAL_HEADER = {
   name: 'x-internal-tool-key',
@@ -26,6 +27,7 @@ const INTERNAL_HEADER = {
 
 @ApiTags('categories')
 @Controller('categories')
+@UseGuards(JsonObjectGuard)
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 

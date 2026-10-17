@@ -198,7 +198,10 @@ describe('Categories HTTP with real MongoDB', () => {
         if (category)
           await connection
             .collection('pantry_items')
-            .insertOne({ id: 2, categoryId: id }, { session });
+            .insertOne(
+              { id: 2, categoryId: id, normalizedName: 'race item' },
+              { session },
+            );
       }),
       request(app.getHttpServer())
         .delete(`/api/categories/${id}`)

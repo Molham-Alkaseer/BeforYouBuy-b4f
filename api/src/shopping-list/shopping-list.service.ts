@@ -1,190 +1,364 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { CreateManualEntryDto } from './dto/create-manual-entry.dto'
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { ClientSession, Model } from 'mongoose';
+import { ShoppingEntry, EntryStatus } from './schemas/shopping-entry.schema';
+import { PantryItem } from '../pantry/schemas/pantry-item.schema';
+import { Category } from '../categories/schemas/category.schema';
+import { ClockService } from '../common/clock/clock.service';
+import { IdsService } from '../database/ids.service';
+import { WriteService } from '../database/write.service';
+import { apiError } from '../common/errors/api-error';
+import { calculatePantryStatus } from '../pantry/pantry-status';
+import { pantryResponse } from '../pantry/pantry-response';
+import { CreateManualEntryDto } from './dto/create-manual-entry.dto';
 import { PurchaseEntryDto } from './dto/purchase-entry.dto';
-import { EntryStatus } from './schemas/shopping-entry.schema';
-import * as mockData from './mocks/shoppind-list.mocks.json';
+import { FindShoppingListQueryDto } from './dto/find-shopping-list-query.dto';
 
 @Injectable()
 export class ShoppingListService {
-  private pendingEntries = [...mockData.shoppingPending.items];
-  private pantryItems = [...mockData.pantry.items];
-  private nextId = 300; 
+  private readonly logger = new Logger(ShoppingListService.name);
+  constructor(
+    @InjectModel(ShoppingEntry.name)
+    private readonly entries: Model<ShoppingEntry>,
+    @InjectModel(PantryItem.name) private readonly items: Model<PantryItem>,
+    @InjectModel(Category.name) private readonly categories: Model<Category>,
+    private readonly clock: ClockService,
+    private readonly ids: IdsService,
+    private readonly writes: WriteService,
+  ) {}
 
-  generateShoppingList() {
-    let addedCount = 0;
-    let updatedCount = 0;
-    let unchangedCount = 0;
-
-    const eligiblePantryItems = this.pantryItems.filter(item => 
-      item.statuses.includes('LOW STOCK') || item.statuses.includes('EXPIRED')
+  private nameConflict() {
+    return apiError(
+      409,
+      'PENDING_NAME_CONFLICT',
+      'A different Pending entry uses this name. Remove or purchase it first.',
+      {
+        name: [
+          'Pending names must be unique, ignoring capitals and surrounding spaces.',
+        ],
+      },
     );
-
-    for (const pantryItem of eligiblePantryItems) {
-      const isExpired = pantryItem.statuses.includes('EXPIRED');
-      const effectiveQuantity = isExpired ? 0 : pantryItem.quantity;
-      const suggestedBuyQuantity = Math.max(1, pantryItem.minimumQuantity - effectiveQuantity);
-
-      const existingEntry = this.pendingEntries.find(
-        entry => entry.pantryItemId === pantryItem.id && entry.status === EntryStatus.PENDING
-      );
-
-      if (existingEntry) {
-        if (existingEntry.quantityToBuy !== suggestedBuyQuantity) {
-          existingEntry.quantityToBuy = suggestedBuyQuantity;
-          updatedCount++;
-        } else {
-          unchangedCount++;
-        }
-      } else {
-        const nameConflict = this.pendingEntries.find(
-          entry => entry.name.toLowerCase() === pantryItem.name.toLowerCase() && entry.status === EntryStatus.PENDING
-        );
-
-        if (nameConflict) {
-          continue; 
-        }
-
-        this.pendingEntries.push({
-          id: this.nextId++,
-          name: pantryItem.name,
-          quantityToBuy: suggestedBuyQuantity,
-          unit: pantryItem.unit,
-          pantryItemId: pantryItem.id,
-          status: EntryStatus.PENDING,
-          createdAt: new Date().toISOString(),
-          purchasedAt: null,
-          purchasedQuantity: null,
-          newExpiryDate: null,
-          pantryStatuses: pantryItem.statuses 
-        } as any);
-        addedCount++;
-      }
-    }
-
-    console.log(`Generated list: ${addedCount} added, ${updatedCount} updated, ${unchangedCount} unchanged.`);
-
-    return this.pendingEntries.filter(entry => entry.status === EntryStatus.PENDING);
   }
 
-  addManualEntry(dto: CreateManualEntryDto) {
-    const normalizedName = dto.name.toLowerCase().trim();
-
-    const existingEntry = this.pendingEntries.find(
-      entry => entry.name.toLowerCase().trim() === normalizedName && entry.status === EntryStatus.PENDING
-    );
-
-    if (existingEntry) {
-      throw new ConflictException(`An item with the name '${dto.name}' is already in the pending list.`);
+  private async nameWrite<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      if (error?.code === 11000 && error.keyPattern?.normalizedName)
+        throw this.nameConflict();
+      throw error;
     }
-
-    const newEntry = {
-      id: this.nextId++,
-      name: dto.name.trim(),
-      quantityToBuy: dto.quantityToBuy,
-      unit: null,          
-      pantryItemId: null,  
-      status: EntryStatus.PENDING,
-      createdAt: new Date().toISOString(),
-      purchasedAt: null,
-      purchasedQuantity: null,
-      newExpiryDate: null,
-      pantryStatuses: []
-    };
-
-    this.pendingEntries.push(newEntry as any);
-    return newEntry;
   }
 
-  findAll(status?: EntryStatus, pantryItemId?: number) {
-    let filtered = this.pendingEntries;
-
-    if (status) {
-      filtered = filtered.filter(entry => entry.status === status);
-    }
-    if (pantryItemId) {
-      filtered = filtered.filter(entry => entry.pantryItemId === pantryItemId);
-    }
-
-    filtered.sort((a, b) => {
-      if (a.status === EntryStatus.PENDING && b.status === EntryStatus.PENDING) {
-        const dateDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        return dateDiff !== 0 ? dateDiff : a.id - b.id;
-      } else if (a.status === EntryStatus.PURCHASED && b.status === EntryStatus.PURCHASED) {
-        const dateDiff = new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime();
-        return dateDiff !== 0 ? dateDiff : a.id - b.id;
-      }
-      return 0;
-    });
-
-    const allPending = this.pendingEntries.filter(e => e.status === EntryStatus.PENDING);
-    const pendingSummary = {
-      total: allPending.length,
-      linked: allPending.filter(e => e.pantryItemId !== null).length,
-      manual: allPending.filter(e => e.pantryItemId === null).length,
-    };
-
+  private response(entry: ShoppingEntry, today: string, linked?: PantryItem) {
     return {
-      items: filtered,
-      total: filtered.length,
-      pendingSummary,
+      id: entry.id,
+      name: entry.name,
+      quantityToBuy: entry.quantityToBuy,
+      unit: entry.unit ?? null,
+      pantryItemId: entry.pantryItemId ?? null,
+      status: entry.status,
+      createdAt: new Date(entry.createdAt).toISOString(),
+      purchasedAt: entry.purchasedAt
+        ? new Date(entry.purchasedAt).toISOString()
+        : null,
+      purchasedQuantity: entry.purchasedQuantity ?? null,
+      newExpiryDate: entry.newExpiryDate ?? null,
+      pantryStatuses:
+        entry.status === EntryStatus.PENDING && linked
+          ? calculatePantryStatus(linked, today).statuses
+          : [],
     };
   }
 
-  purchaseEntry(id: number, dto: PurchaseEntryDto) {
-    const entry = this.pendingEntries.find(e => e.id === id);
-
-    if (!entry) {
-      throw new NotFoundException(`Shopping entry with id ${id} not found.`);
-    }
-
-    if (entry.status === EntryStatus.PURCHASED) {
-      throw new ConflictException(`Entry ${id} has already been purchased.`);
-    }
-
-    if (entry.pantryItemId !== null) {
-      const pantryItem = this.pantryItems.find(p => p.id === entry.pantryItemId);
-      
-      if (pantryItem) {
-        const isExpired = pantryItem.statuses.includes('EXPIRED');
-
-        if (isExpired) {
-          if (!dto.newExpiryDate) {
-            throw new ConflictException('A new expiry date is required when purchasing to replace an expired item.');
-          }
-          pantryItem.quantity = dto.purchasedQuantity; 
-          pantryItem.expiryDate = dto.newExpiryDate;
-        } else {
-          pantryItem.quantity += dto.purchasedQuantity;
-          if (dto.newExpiryDate) {
-            pantryItem.expiryDate = dto.newExpiryDate;
-          }
-        }
-      }
-    }
-
-    entry.status = EntryStatus.PURCHASED;
-    entry.purchasedAt = new Date().toISOString() as any;
-    entry.purchasedQuantity = dto.purchasedQuantity;
-    entry.newExpiryDate = dto.newExpiryDate || null;
-
-    console.log(`Successfully purchased entry ${id}. Restocked quantity: ${dto.purchasedQuantity}`);
-
-    return entry;
+  async findAll(
+    query: FindShoppingListQueryDto = {},
+    session?: ClientSession,
+    today = this.clock.today(),
+  ) {
+    const filter = {
+      ...(query.status === undefined ? {} : { status: query.status }),
+      ...(query.pantryItemId === undefined
+        ? {}
+        : { pantryItemId: query.pantryItemId }),
+    };
+    // Session operations are deliberately sequential; a transaction cannot run them in parallel.
+    const stored = await this.entries
+      .find(filter)
+      .session(session ?? null)
+      .lean()
+      .exec();
+    const pantry = await this.items
+      .find()
+      .session(session ?? null)
+      .lean()
+      .exec();
+    const pending = await this.entries
+      .find({ status: EntryStatus.PENDING })
+      .session(session ?? null)
+      .lean()
+      .exec();
+    const linkedById = new Map(pantry.map((item) => [item.id, item]));
+    stored.sort((a, b) => {
+      if (a.status !== b.status)
+        return a.status === EntryStatus.PENDING ? -1 : 1;
+      return a.status === EntryStatus.PENDING
+        ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() ||
+            a.id - b.id
+        : new Date(b.purchasedAt).getTime() -
+            new Date(a.purchasedAt).getTime() || b.id - a.id;
+    });
+    const items = stored.map((entry) =>
+      this.response(entry, today, linkedById.get(entry.pantryItemId)),
+    );
+    const linked = pending.filter(
+      (entry) => entry.pantryItemId !== null,
+    ).length;
+    return {
+      asOfDate: today,
+      items,
+      total: items.length,
+      pendingSummary: {
+        total: pending.length,
+        linked,
+        manual: pending.length - linked,
+      },
+    };
   }
 
-  deleteEntry(id: number) {
-    const entryIndex = this.pendingEntries.findIndex(e => e.id === id);
+  async addManualEntry(dto: CreateManualEntryDto) {
+    const id = await this.ids.next('shopping_entries');
+    const today = this.clock.today();
+    const result = await this.nameWrite(() =>
+      this.writes.run(async (session) => {
+        const normalizedName = dto.name.trim().toLowerCase();
+        if (
+          await this.entries
+            .exists({ normalizedName, status: EntryStatus.PENDING })
+            .session(session)
+            .exec()
+        )
+          throw this.nameConflict();
+        const [entry] = await this.entries.create(
+          [
+            {
+              id,
+              name: dto.name.trim(),
+              normalizedName,
+              quantityToBuy: dto.quantityToBuy,
+              unit: null,
+              pantryItemId: null,
+              status: EntryStatus.PENDING,
+              createdAt: this.clock.now(),
+              purchasedAt: null,
+              purchasedQuantity: null,
+              newExpiryDate: null,
+            },
+          ],
+          { session },
+        );
+        return this.response(entry, today);
+      }),
+    );
+    this.logger.log(`Created manual shopping entry ${id}`);
+    return result;
+  }
 
-    if (entryIndex === -1) {
-      throw new NotFoundException(`Shopping entry with id ${id} not found.`);
-    }
+  async generateShoppingList() {
+    const today = this.clock.today();
+    const result = await this.nameWrite(() =>
+      this.writes.run(async (session) => {
+        const pantry = await this.items
+          .find()
+          .sort({ id: 1 })
+          .session(session)
+          .lean()
+          .exec();
+        const pending = await this.entries
+          .find({ status: EntryStatus.PENDING })
+          .session(session)
+          .exec();
+        let added = 0,
+          updated = 0,
+          unchanged = 0;
+        for (const item of pantry) {
+          const { statuses } = calculatePantryStatus(item, today);
+          if (!statuses.includes('LOW STOCK') && !statuses.includes('EXPIRED'))
+            continue;
+          const effectiveQuantity = statuses.includes('EXPIRED')
+            ? 0
+            : item.quantity;
+          const quantityToBuy = Number(
+            Math.max(1, item.minimumQuantity - effectiveQuantity).toPrecision(
+              15,
+            ),
+          );
+          const normalizedName = item.name.trim().toLowerCase();
+          const existing = pending.find(
+            (entry) => entry.pantryItemId === item.id,
+          );
+          const conflict = pending.find(
+            (entry) =>
+              entry.normalizedName === normalizedName &&
+              entry.id !== existing?.id,
+          );
+          if (conflict) throw this.nameConflict();
+          if (existing) {
+            if (
+              existing.name !== item.name ||
+              existing.unit !== item.unit ||
+              existing.quantityToBuy !== quantityToBuy
+            ) {
+              existing.name = item.name;
+              existing.normalizedName = normalizedName;
+              existing.unit = item.unit;
+              existing.quantityToBuy = quantityToBuy;
+              await existing.save({ session });
+              updated++;
+            } else unchanged++;
+          } else {
+            // These allocations are part of the SAME transaction, so retries cannot leak side effects.
+            const id = await this.ids.next('shopping_entries', session);
+            const [entry] = await this.entries.create(
+              [
+                {
+                  id,
+                  name: item.name,
+                  normalizedName,
+                  quantityToBuy,
+                  unit: item.unit,
+                  pantryItemId: item.id,
+                  status: EntryStatus.PENDING,
+                  createdAt: this.clock.now(),
+                  purchasedAt: null,
+                  purchasedQuantity: null,
+                  newExpiryDate: null,
+                },
+              ],
+              { session },
+            );
+            pending.push(entry);
+            added++;
+          }
+        }
+        return {
+          added,
+          updated,
+          unchanged,
+          pending: await this.findAll(
+            { status: EntryStatus.PENDING },
+            session,
+            today,
+          ),
+        };
+      }),
+    );
+    this.logger.log(
+      `Generated shopping list: added=${result.added}, updated=${result.updated}, unchanged=${result.unchanged}`,
+    );
+    return result;
+  }
 
-    const entry = this.pendingEntries[entryIndex];
+  async purchaseEntry(id: number, dto: PurchaseEntryDto) {
+    const today = this.clock.today();
+    const result = await this.writes.run(async (session) => {
+      const entry = await this.entries.findOne({ id }).session(session).exec();
+      if (!entry)
+        throw apiError(404, 'ENTRY_NOT_FOUND', 'Shopping entry not found.');
+      if (entry.status === EntryStatus.PURCHASED)
+        throw apiError(
+          409,
+          'ALREADY_PURCHASED',
+          'This entry has already been purchased.',
+        );
+      let pantryItem = null;
+      if (entry.pantryItemId === null) {
+        if (dto.newExpiryDate !== undefined)
+          throw apiError(
+            400,
+            'VALIDATION_ERROR',
+            'Manual entries cannot have an expiry date.',
+            {
+              newExpiryDate: ['Omit the expiry date for a manual entry.'],
+            },
+          );
+      } else {
+        const item = await this.items
+          .findOne({ id: entry.pantryItemId })
+          .session(session)
+          .exec();
+        if (!item)
+          throw apiError(
+            404,
+            'ITEM_NOT_FOUND',
+            'Linked pantry item not found.',
+          );
+        const expired = calculatePantryStatus(item, today).statuses.includes(
+          'EXPIRED',
+        );
+        if (expired && dto.newExpiryDate === undefined)
+          throw apiError(
+            400,
+            'EXPIRY_REQUIRED',
+            'A new expiry date is required to replace expired stock.',
+            {
+              newExpiryDate: [
+                'Provide a valid expiry date for the replacement stock.',
+              ],
+            },
+          );
+        const quantity = expired
+          ? dto.purchasedQuantity
+          : item.quantity + dto.purchasedQuantity;
+        if (!Number.isFinite(quantity))
+          throw apiError(
+            400,
+            'VALIDATION_ERROR',
+            'The resulting stock quantity is too large.',
+            {
+              purchasedQuantity: ['Choose a smaller quantity.'],
+            },
+          );
+        item.quantity = Number(quantity.toPrecision(15));
+        if (dto.newExpiryDate !== undefined)
+          item.expiryDate = dto.newExpiryDate;
+        await item.save({ session });
+        entry.name = item.name;
+        entry.normalizedName = item.normalizedName;
+        entry.unit = item.unit;
+        entry.newExpiryDate = item.expiryDate;
+        const category = await this.categories
+          .findOne({ id: item.categoryId })
+          .session(session)
+          .lean()
+          .exec();
+        pantryItem = pantryResponse(item, category?.name ?? '', today);
+      }
+      entry.status = EntryStatus.PURCHASED;
+      entry.purchasedAt = this.clock.now();
+      entry.purchasedQuantity = dto.purchasedQuantity;
+      await entry.save({ session });
+      return { entry: this.response(entry, today), pantryItem };
+    });
+    this.logger.log(
+      `Purchased shopping entry ${id}; pantryItemId=${result.entry.pantryItemId ?? 'manual'}, quantity=${dto.purchasedQuantity}, stock=${result.pantryItem?.quantity ?? 'unchanged'}`,
+    );
+    return result;
+  }
 
-    if (entry.status === EntryStatus.PURCHASED) {
-      throw new ConflictException(`Cannot delete entry ${id} because it has already been purchased.`);
-    }
-
-    this.pendingEntries.splice(entryIndex, 1);
+  async deleteEntry(id: number): Promise<void> {
+    await this.writes.run(async (session) => {
+      const entry = await this.entries.findOne({ id }).session(session).exec();
+      if (!entry)
+        throw apiError(404, 'ENTRY_NOT_FOUND', 'Shopping entry not found.');
+      if (entry.status === EntryStatus.PURCHASED)
+        throw apiError(
+          409,
+          'ENTRY_ALREADY_PURCHASED',
+          'Purchase history cannot be deleted.',
+        );
+      await this.entries.deleteOne({ id }, { session }).exec();
+    });
+    this.logger.log(`Deleted Pending shopping entry ${id}`);
   }
 }

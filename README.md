@@ -4,22 +4,20 @@ Household pantry assistant built with React, NestJS and MongoDB.
 
 ## Current status
 
-Molham's category endpoints, shared validation/errors, Damascus clock, numeric IDs, transaction helper and atomic demo seed are implemented. Pantry, shopping and dashboard code in this checkout remains a scaffold. The frontend pages are also placeholders. A successful build does not mean the entire application is finished.
+The three backend contributions are integrated: Molham's foundation/categories, Mustafa's pantry/dashboard, and Allaith's shopping flow with MongoDB persistence and transaction fixes. Categories, pantry, shopping and dashboard endpoints work together against real stored data.
 
-See [Molham's implementation guide](docs/molham-super.md), [integration results](docs/integration-results.md), and the authoritative [API contract v1](Tasks/apicontract.md).
+The frontend contributions have not been merged or verified end to end in this backend integration. The local client still builds and passes lint, but its pages remain the starter version.
 
-## Folders
+See [integration results](docs/integration-results.md), [Molham's guide](docs/molham-super.md), and the authoritative [API contract](Tasks/apicontract.md).
+
+## Folders and setup
 
 - `client/`: React, TypeScript and Vite.
-- `api/`: NestJS API, shared infrastructure and tests.
-- `Tasks/`: team assignments, contract and mock fixture.
-- `docs/`: integration handoff, database evidence and explanations.
+- `api/`: NestJS, MongoDB infrastructure and tests.
+- `Tasks/`: assignments, contract and fixture.
+- `docs/`: requirements, explanations and measured evidence.
 
-## Install and run on Windows
-
-Use Node.js 20+ and MongoDB Server with replica-set support. The supplied script defaults to MongoDB 8.0's Windows installation path; pass `-MongoExe` if yours differs.
-
-From the repository root:
+Use Node.js 20+ and MongoDB Server with replica-set support. From the repository root:
 
 ```powershell
 cd api
@@ -28,7 +26,9 @@ npm run db:start
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Edit `api/.env`:
+The Windows database script defaults to MongoDB 8.0's installation path. Pass `-MongoExe` directly to `scripts/start-local-mongo.ps1` for another installation.
+
+Configure `api/.env`:
 
 ```dotenv
 PORT=3000
@@ -37,68 +37,60 @@ INTERNAL_TOOL_KEY=replace-with-a-local-secret
 SEED_ON_START=true
 ```
 
-Then, inside `api/`:
-
-```powershell
-npm run start:dev
-```
-
-In a second terminal, from the repository root:
-
-```powershell
-cd client
-npm install
-npm run dev
-```
+Inside `api/`, run `npm run start:dev`. In a second terminal, enter `client/`, run `npm install`, then `npm run dev`.
 
 Frontend: http://localhost:5173. API: http://localhost:3000/api. Swagger: http://localhost:3000/docs.
 
-The local database script starts a localhost-only replica set named `byb-rs` on port 27018. Data lives in ignored `api/.local/mongo-rs`. The existing standalone MongoDB Windows service on port 27017 is untouched. Keep the data directory to preserve your work. Restart the API after changing its environment file.
+The database script runs a localhost-only replica set on port 27018, with data in ignored `api/.local/mongo-rs`. It does not change the existing MongoDB Windows service on port 27017. Restart the API after changing its environment. Transactions require this replica set; there is no nontransactional fallback.
 
-A standalone MongoDB connection can support reads, but transactional mutations require the replica set. Never silently fall back to nontransactional writes.
+## Implemented routes
 
-## Category API
+| Resource | Routes |
+| --- | --- |
+| Categories | GET/POST /categories; PATCH/DELETE /categories/:id |
+| Pantry | GET/POST /pantry; GET/PATCH/DELETE /pantry/:id; POST /pantry/:id/use |
+| Shopping | GET/POST /shopping-list; POST /shopping-list/generate; POST /shopping-list/:id/purchase; DELETE /shopping-list/:id |
+| Dashboard | GET /dashboard |
 
-| Method | Route | Success | Access |
-| --- | --- | --- | --- |
-| GET | /api/categories | 200 `{ items: [{ id, name }] }` | Public |
-| POST | /api/categories | 201 `{ id, name }` | Internal key |
-| PATCH | /api/categories/:id | 200 `{ id, name }` | Internal key |
-| DELETE | /api/categories/:id | 204, no body | Internal key |
+All paths are relative to /api. Generate, use and purchase return 200; resource creation returns 201; deletion returns empty 204. Manual entries are created at POST /shopping-list, not /shopping-list/manual.
 
-POST/PATCH accept only `{ "name": "Dairy" }`. Names are trimmed and compared case-insensitively for uniqueness. Blank names, wrong types, unknown body/query fields, empty PATCH and invalid numeric IDs are rejected. A category used by a pantry item cannot be deleted.
+Only category mutations require `x-internal-tool-key`. Keep that key in backend/internal tooling; never include it in React. [Category HTTP examples](docs/categories.http) are provided.
 
-Use the `x-internal-tool-key` header for mutations only. The internal key belongs in the backend environment and internal tools, never the frontend. See [HTTP examples](docs/categories.http).
+DTOs validate bodies and queries, reject extra fields, and retain strict numeric/date semantics. Body arrays are rejected. Names are trimmed and compared case-insensitively. Errors use `{ statusCode, code, message, fieldErrors }`; unexpected internal failures expose no credentials.
 
-Every error is `{ statusCode, code, message, fieldErrors }`. Internal failures return generic text; logs record a safe error type without raw requests, credentials or database errors.
+## Data and relationships
 
-## Database design and concurrency
+Categories, pantry items and shopping entries live in separate collections linked through numeric application IDs. This centralizes category names and preserves historical purchase snapshots independently of current stock. No ObjectId relationship, populate or aggregation pipeline is used.
 
-Separate `categories`, `pantry_items` and `shopping_entries` collections use numeric application IDs as relationships. MongoDB's internal `_id` is not part of the API. There is no populate or aggregation pipeline. Purchased records must retain snapshots after pantry edits/deletion; implementation of that business behavior belongs to Allaith.
+DatabaseModule registers all three owner schemas and exports their models. It binds Mustafa's dependency aliases to the same ClockService, IdsService and WriteService used by the other domains. Domains do not import one another's services.
 
-`IdsService.next(collection)` uses durable counters and atomic increments. It reconciles existing IDs, never lowers counters and never reuses deleted IDs. Failed operations may consume IDs.
+IdsService uses persistent counters and atomic increments; deleting a record never resets its counter. Normal create operations allocate before a retryable transaction, so failures may leave ID gaps. Generation allocates within the transaction using the same session, rolling back counter changes along with failed generation.
 
-`WriteService.run(callback)` uses a MongoDB transaction and a shared write-fence document. Every cooperating domain mutation must use it and pass the same session to ALL reads/writes. This prevents partial stock/history updates and reference-check/delete races. See [the required integration protocol](docs/write-consistency.md). The unfinished pantry/shopping code is not yet integrated with this helper.
+## Consistent writes and business behavior
 
-`DatabaseModule` imports the owners' schema files without importing domain modules/services. It registers each schema when the owner exports it. Missing schemas produce an explicit startup warning. This preserves independent category development without fabricating teammate implementations.
+Every category, pantry and shopping mutation uses WriteService. It starts a transaction and updates a shared household fence before business checks. All participating reads/writes use the same session. This prevents partial stock/history writes and cross-collection check/delete races. A missing fence fails safely. See [write consistency](docs/write-consistency.md).
 
-## Seed and dates
+- Pantry statuses/reasons are computed from stored quantities, minimums and expiry on each read.
+- Use cannot exceed stock; deletion is blocked by a Pending shopping entry.
+- Generation creates/updates suggestions for LOW STOCK or EXPIRED items and preserves manual/history entries.
+- A conflicting Pending name aborts the entire generation.
+- Purchase adds normal stock, replaces expired stock only with a supplied valid expiry date, and commits the history snapshot with stock.
+- Purchased entries cannot be purchased again or deleted. Snapshots survive subsequent pantry edits/deletion.
+- Dashboard totals and urgency lists are calculated from current stored records.
 
-`SEED_ON_START=true` runs the seed after module initialization. False/absent disables automatic seeding. Only an empty application database gets demo data: 7 categories and 20 pantry items. Existing application records or a completed seed marker prevent reseeding.
+## Seed, dates and mock mode
 
-All inserts, counter initialization and the completion marker commit together. A failure rolls everything back. Relative expiry offsets use the current household date, so the demo remains useful on future days. The seed gives 5 LOW STOCK, 3 USE SOON, 2 EXPIRED and 12 OK items; statuses can overlap. These labels are checked in tests, not stored in MongoDB.
+SEED_ON_START=true seeds 7 categories and 20 items only when application collections are empty and no completed seed marker exists. Inserts, initial counters and the marker commit atomically. Existing data survives restarts and partial seed failures roll back.
 
-ClockService.today() uses Asia/Damascus and returns YYYY-MM-DD. ClockService.now() returns an instant; timestamp responses use ISO UTC. Expiry remains a calendar string or null.
+Expiry offsets are relative to the household date. The seed gives 5 LOW STOCK, 3 USE SOON, 2 EXPIRED and 12 OK items; statuses overlap. Computed labels are never stored. Shopping/history is optional and not seeded automatically: generate creates current suggestions.
 
-Shopping/history demo records are optional and are not seeded. Purchases are never replayed into stock.
+ClockService.today() returns YYYY-MM-DD in Asia/Damascus; now() provides an instant. Date-only expiry fields remain strings/null. Timestamp responses use ISO UTC.
 
-## Frontend transport and mock mode
-
-Vite proxies `/api` to port 3000. `VITE_API_URL=/api` is the normal client setting. The contract assigns `VITE_USE_MOCKS=true` to Mohammad's development adapter; that adapter is not implemented in this checkout. Setting the variable alone currently does not create a working mock. Normal category reads need no key.
+The backend no longer imports shopping mock data. Frontend `VITE_API_URL=/api` uses Vite's port-3000 proxy. `VITE_USE_MOCKS` remains a contract setting for Mohammad's future adapter; setting it alone does not implement mock mode in this checkout.
 
 ## Verification
 
-Start the local replica set first, then run from the repository root:
+Start the replica set, then run from the root:
 
 ```powershell
 npm --prefix api run build
@@ -107,23 +99,22 @@ npm --prefix api run test:unit
 npm --prefix client run build
 npm --prefix client run lint
 node api/scripts/measure-index.cjs
-node api/scripts/verify-db-restart.cjs
 ```
 
-The integration suite uses disposable `byb_test_*` databases on port 27018 and removes them afterward. The unit command runs shared-foundation checks without MongoDB.
+The suite has 94 passing tests across 6 suites, including real MongoDB HTTP tests for all eight PDF section 17 backend demo behaviors. These are API/Swagger-definition/log checks, not a completed visual frontend demonstration. Tests use disposable byb_test_* databases on port 27018.
 
-The restart verification intentionally restarts only the task-created local replica set after verifying its exact data path and replica-set name. Run it when no other work is using that test instance.
+`node api/scripts/verify-db-restart.cjs` verifies a real database process restart. It checks the exact task-owned data path before restarting; run when nobody else is using that local instance. Existing [restart evidence](docs/restart-evidence.json) is retained.
 
-## Actual index measurements
+## Actual query and index decision
 
-A representative `find({ categoryId: 1 }).sort({ expiryDate: 1 })` query was measured against the 20-item seed on 17 October 2026 (Asia/Damascus):
+The measurement script imports Mustafa's actual `pantryStoredQuery()`, also used by PantryService.findAll. For category 1 and USE SOON it filters categoryId plus an expiryDate range and sorts by expiryDate then id. Statuses are still calculated afterward and public results are sorted by id.
 
-| Run | Keys examined | Documents examined | Execution time |
+On the 20-item seed, measured 17 October 2026:
+
+| Stage | Keys examined | Documents examined | Time |
 | --- | ---: | ---: | ---: |
-| Before candidate index | 0 | 20 | 1 ms |
-| After candidate index, optimizer selected it | 6 | 6 | 14 ms |
-| Explicitly hinted candidate | 6 | 6 | 0 ms |
+| Before candidate | 0 | 20 | 0 ms |
+| Candidate { categoryId: 1, expiryDate: 1, id: 1 } | 1 | 1 | 18 ms |
+| After decision: candidate removed | 0 | 20 | 0 ms |
 
-The candidate reduced examined documents but this tiny timing sample does not demonstrate a speedup. No production performance index was added. Mustafa's actual category/expiry query is still unimplemented; repeat the measurement after integration on representative data. Correctness indexes for unique IDs/names and Pending shopping constraints are separate.
-
-Raw plans: [index evidence](docs/index-evidence.json). Restart evidence: [database restart result](docs/restart-evidence.json).
+One item matched in each run. The candidate reduces examined documents but this tiny sample does not show a useful latency benefit. The decision is to keep correctness indexes only for the current workload and reconsider if it grows. No computed-status index exists. Full plans and the post-decision measurement are in [index-evidence.json](docs/index-evidence.json).

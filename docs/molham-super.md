@@ -1,193 +1,163 @@
-# Molham Super — My Backend Work Explained
+# Molham Super — Backend Work and Integration
 
-Prepared for Molham on 17 October 2026 (Asia/Damascus).
+Updated 17 October 2026, Asia/Damascus.
 
 Project: C:\Users\molha\OneDrive\Desktop\MiniProject\BeforYouBuy-b4f
-Branch: member-molham
-Requested standalone copy: C:\Users\molha\OneDrive\Desktop\MiniProject\molham-super.md
+Delivery branch: member-molham
+Integration branch: codex/backend-integration
 
-## What is finished?
+## Current result
 
-Your category backend, shared API foundation, clock, durable numeric IDs, transaction helper, atomic seed, database setup, automated tests and setup documentation are implemented.
+The three backend contributions are merged and integrated:
+- Molham: categories, shared infrastructure, IDs, clock, transactions, seed and documentation.
+- Mustafa: pantry schema, status calculation, CRUD, stock use, filters and dashboard.
+- Allaith: shopping contribution, with the integration fixes needed to replace mock storage and satisfy the shared contract.
 
-Full team integration is NOT finished. Mustafa's schema and business endpoints are still placeholders in this checkout. Allaith's separate branch needs contract and shared-session fixes. The frontend owners must connect and verify their screens. These dependencies are listed explicitly below rather than marked done.
+The backend build and 94 tests across 6 suites pass. The client build and lint pass, but frontend branches/screens were not integrated in this backend task.
 
-## 1. API foundation
+The backend dependencies previously listed as missing are resolved. The remaining project work is frontend/live screen integration and the team's presentation.
 
-Files:
-- api/src/main.ts
-- api/src/app.module.ts
-- api/src/common/validation.ts
-- api/src/common/errors/api-error.ts
-- api/src/common/filters/all-exceptions.filter.ts
-- api/src/common/pipes/positive-id.pipe.ts
-- api/src/common/pipes/no-fields.pipe.ts
+## 1. Your API foundation
 
-The server uses /api for resource routes and /docs for Swagger.
+Files: api/src/main.ts, api/src/app.module.ts, api/src/common/.
 
-ValidationPipe runs the decorators on DTO classes. Unknown properties are rejected instead of silently ignored. The category endpoints also use NoFieldsPipe for places that accept no body/query fields.
+The API uses /api for resources and /docs for Swagger. ValidationPipe checks DTO decorators, rejects unknown fields and does not coerce body numeric strings into numbers.
 
-PositiveIdPipe accepts positive safe integer IDs and rejects 0, negatives, fractions, scientific notation, invalid text and numbers beyond JavaScript's safe integer limit.
+PositiveIdPipe rejects zero, negatives, fractional/unsafe IDs and malformed text. NoFieldsPipe rejects fields where an endpoint accepts no body/query. JSON-object guards reject array bodies before DTO transformation.
 
-Every error response has:
-```json
-{
-  "statusCode": 400,
-  "code": "VALIDATION_ERROR",
-  "message": "Please correct the invalid fields.",
-  "fieldErrors": { "name": ["name should not be empty"] }
-}
-```
+Every failure returns statusCode, code, message and fieldErrors. Unexpected internal failures use safe generic text and do not log raw credentials or request bodies.
 
-Business errors use apiError(). Unexpected server failures return a generic message. Logs include a safe error type, not raw credentials or request bodies.
+## 2. Your categories feature
 
-Proof: validation, invalid-ID, error-safety and HTTP tests pass. Future domain controllers must bind their own DTOs to use the same validation.
+Files: api/src/categories/.
 
-## 2. Categories — your first complete feature
+The request flow is controller -> service -> Mongoose model -> clean response.
 
-Files: api/src/categories/ (controller, service, module, DTOs and schema).
+A category stores:
+- id: public numeric identifier.
+- name: readable, trimmed name.
+- normalizedName: lowercase comparison name for uniqueness.
 
-The request flow is:
+GET /api/categories is public. POST, PATCH and DELETE require x-internal-tool-key. The key belongs in api/.env and internal tooling, never React.
 
-```text
-HTTP request
-  -> controller (route, input DTO and guard)
-  -> service (business rules)
-  -> Mongoose model (database access)
-  -> clean response containing id and name
-```
+Blank/invalid names are rejected, duplicate names return 409, missing categories return 404, and used categories cannot be deleted. Responses expose only id/name, never MongoDB metadata or normalizedName.
 
-The Category schema stores:
-- id: the public numeric identifier.
-- name: the readable trimmed name.
-- normalizedName: the lowercase name used for uniqueness.
+## 3. Shared model registration and teammate wiring
 
-The controller provides:
-- GET /api/categories — public list sorted by ID.
-- POST /api/categories — create.
-- PATCH /api/categories/:id — rename.
-- DELETE /api/categories/:id — delete an unused category.
+Files: api/src/database/database.module.ts, domain-models.ts.
 
-Only mutations require x-internal-tool-key. The key is read from api/.env and must never be put in React code.
+DatabaseModule now imports and registers all three actual owner schemas:
+- Category -> categories.
+- PantryItem -> pantry_items.
+- ShoppingEntry -> shopping_entries.
 
-CreateCategoryDto rejects missing, blank, null and non-string names. It trims whitespace first. UpdateCategoryDto requires a name because it is the only editable field, so an empty PATCH is invalid.
+It exports models and binds Mustafa's ClockService, IdsService and HouseholdWrites aliases to your shared implementations. PantryModule, DashboardModule and ShoppingListModule import the shared providers. No domain service imports another domain service.
 
-The service catches normalized-name uniqueness failures and returns 409 DUPLICATE_CATEGORY_NAME. Missing records return 404 CATEGORY_NOT_FOUND. A category used by a pantry item returns 409 CATEGORY_IN_USE on deletion. Successful deletion returns 204 with no response body.
+Correctness indexes initialize even if automatic demo seeding is disabled.
 
-The service reads the pantry collection directly for the usage check, avoiding a dependency on Mustafa's unfinished PantryService.
+## 4. Clock and IDs
 
-Proof: real HTTP tests cover success, all guard cases, invalid inputs, duplicates, used-category deletion, concurrent creates, protected delete/reference races and persistence after restart.
+ClockService.today() returns the calendar date in Asia/Damascus. now() returns an instant; timestamp responses are ISO UTC. Expiry stays a YYYY-MM-DD string or null.
 
-## 3. Shared database registration
+IdsService uses durable atomic counters. It reconciles existing records and never lowers the counter, so deleted IDs are never reused.
 
-Files:
-- api/src/database/database.module.ts
-- api/src/database/domain-models.ts
+Ordinary create operations allocate before retryable work; failed requests can leave harmless gaps. Generation allocates using IdsService.next(collection, session), so those counter changes participate in the same transaction as the generated records.
 
-Your bootcamp used MongooseModule.forFeature inside each feature module. Here, the team agreement puts registrations in one DatabaseModule.
+## 5. Safe writes
 
-CategoriesModule imports DatabaseModule and injects Category through @InjectModel(Category.name). DatabaseModule does not import PantryModule or ShoppingListModule, so no circular service dependency is introduced.
+Files: api/src/database/write.service.ts and docs/write-consistency.md.
 
-The registration code imports each owner's schema file and uses the owner's exported schema when available. The current placeholders do not export PantryItemSchema or ShoppingEntrySchema, so startup warns and omits those two registrations. This is an unfinished integration dependency, not an implemented pantry/shopping model.
+Every category, pantry and shopping mutation uses the same WriteService. It starts a MongoDB transaction and updates one shared fence before reading business state. Concurrent writers conflict and retry. If the fence is missing, writing fails safely.
 
-Mustafa and Allaith need to export their schemas and import DatabaseModule in their modules.
+Every participating read/write receives the same session. A failed history write therefore rolls back its stock update. The fence also protects category/item deletion checks against concurrent creation/generation.
 
-## 4. Clock and numeric IDs
+Success logs run after the transaction commits. Callbacks can retry, so external side effects must stay outside them.
 
-Files:
-- api/src/common/clock/clock.service.ts
-- api/src/common/common.module.ts
-- api/src/database/ids.service.ts
+MongoDB transactions require the local replica set. api/scripts/start-local-mongo.ps1 starts byb-rs on localhost port 27018 with files in api/.local/mongo-rs. It does not modify the Windows MongoDB service on port 27017.
 
-ClockService.today() returns YYYY-MM-DD in Asia/Damascus. ClockService.now() returns a Date representing an instant. Calendar expiry strings must not shift according to the browser timezone.
+## 6. Atomic seed
 
-IdsService.next('categories' | 'pantry_items' | 'shopping_entries') allocates IDs with a persistent counter and an atomic database increment. It first accounts for existing/seeded IDs.
+Files: api/src/database/seed.ts, seed-data.ts, seed.module.ts.
 
-Unlike reading the last ID and adding one in application memory, concurrent requests cannot receive the same counter value. Deleting the highest record does not reset the counter. Failed requests may leave gaps; that is expected and safe.
+SEED_ON_START=true creates 7 categories and 20 pantry items only in an empty application database with no completed marker.
 
-Proof: 50 simultaneous allocations were unique, allocation continued above seeded records, deleted IDs were not reused, and a new connection preserved the counter.
+All records, initial counters and the marker commit together. Partial failures roll back; existing data and edits survive restart.
 
-## 5. Failure-safe shared writes
+Expiry dates use offsets from today's household date. The fixture contains 5 LOW STOCK, 3 USE SOON, 2 EXPIRED and 12 OK items; statuses overlap and are computed, never stored.
 
-Files:
-- api/src/database/write.service.ts
-- api/scripts/start-local-mongo.ps1
-- api/scripts/init-replica.cjs
-- docs/write-consistency.md
+Optional shopping history is not seeded automatically. Generate creates current suggestions. The integration tests load fixed history fixtures only into disposable test databases.
 
-A purchase may change stock and create purchase history. Saving one and then failing on the other would leave inconsistent data.
+## 7. Mustafa's code and integration
 
-WriteService.run() wraps related work in one MongoDB transaction. It updates a shared fence record before business reads. Competing writers conflict and retry, preventing check/delete races when all domains follow the protocol.
+Mustafa's latest branch now contains real pantry/dashboard code, superseding the earlier scaffold inspection.
 
-If any step fails, MongoDB rolls back the transaction. If everything succeeds, all writes commit together.
+His status helper calculates overlapping LOW STOCK/EXPIRED/USE SOON and uses OK only when no other status applies. Pantry reads resolve current category names, validate references, combine filters, and hide storage metadata.
 
-Every participating read/write must receive the SAME session. Allocate IDs before the callback; put success logs after run() resolves. Do not run nontransactional side effects inside the callback because MongoDB can retry it.
+We connected his module/provider aliases to the shared infrastructure. His use/delete operations now run with the same transaction/fence as categories and shopping. We adjusted empty body/query validation to work with the global strict pipe.
 
-Transactions require a replica set. The provided script starts an isolated localhost instance on port 27018, named byb-rs. The existing MongoDB Windows service on 27017 is untouched. Data is stored in api/.local/mongo-rs.
+Dashboard reads the actual models, counts overlapping statuses, orders urgent items and includes categories with zero items.
 
-Proof: failure injection rolled back stock, concurrent read/modify/write operations lost no updates, paired stock/history writes committed together, and a cooperating category-reference writer could not leave an orphan.
+## 8. Allaith's code and integration fixes
 
-Remaining: Mustafa and Allaith must use this helper in every mutation and add their own business-rule tests.
+The imported shopping service used mock arrays and a process-local ID counter. Those could not provide persistence or transaction safety.
 
-## 6. Atomic demo seed
+We replaced that storage with the shared MongoDB models and IDs while preserving the intended shopping behavior:
+- POST /shopping-list creates a manual entry.
+- POST /shopping-list/generate returns added/updated/unchanged plus the refreshed Pending list.
+- POST /shopping-list/:id/purchase returns entry and pantryItem.
+- Generate and purchase return 200, as required by the contract.
+- Listing includes asOfDate and Pending totals independent of filters.
 
-Files:
-- api/src/database/seed-data.ts
-- api/src/database/seed.ts
-- api/src/database/seed.module.ts
+The schema now persists normalizedName and newExpiryDate. Unique constraints apply only to Pending names/links, allowing multiple history records and manual entries.
 
-With SEED_ON_START=true, the seed runs after modules initialize. It creates the contract fixture's 7 categories and 20 pantry items only when the application collections are empty and no completed seed marker exists.
+Validation now handles real dates, positive decimals, wrong-type names, null semantics, query IDs, duplicate query keys and unexpected fields. The old runtime mock JSON was removed.
 
-Expiry dates are calculated from today's household date using relative offsets. Nothing is tied to October 2026.
+Generation derives eligibility from current pantry data, refreshes eligible suggestions and retains ineligible/manual/history entries. A name conflict aborts the entire operation.
 
-The seed produces:
-- 5 LOW STOCK items.
-- 3 USE SOON items.
-- 2 EXPIRED items.
-- 12 OK items.
+Purchase adds normal stock, replaces expired stock only when a valid date is supplied, snapshots name/unit/effective expiry, and commits the history change with stock. Repeated/concurrent purchase cannot restock twice. Purchased history survives later edits and pantry deletion.
 
-Some statuses overlap. Computed status labels, reasons and dashboard totals are not stored.
+## 9. Query measurement and index decision
 
-Category inserts, pantry inserts, initial ID counters and the completion marker are one transaction. A failure cannot leave half the demo data. A completed marker also prevents recreating demo records after the user deliberately deletes all of them.
+The measurement script imports the actual pantryStoredQuery helper called by PantryService.findAll.
 
-Existing data is preserved on restart. Optional shopping/history seed was omitted, so no historical purchases are replayed into stock.
+For category 1 and USE SOON, the query filters categoryId plus a stored expiryDate range and sorts expiryDate/id. No computed status field is indexed.
 
-Proof: tests cover relative dates in 2030, exact fixture counts, no computed fields, existing data preservation, restart preservation, concurrent seed requests, partial failure rollback and successful retry.
+Measured on the 20-item seed:
 
-## 7. Relationships and indexes
-
-Collections are separate and linked with numeric categoryId/pantryItemId values. No populate, aggregation pipeline or ObjectId relationship is used.
-
-Unique ID/name indexes enforce correctness. Shopping uniqueness is scoped to Pending records; multiple manual entries with null links and repeated Purchased history for an item are allowed.
-
-Historical purchase snapshots must survive pantry deletion. That behavior remains Allaith's implementation responsibility.
-
-A real index experiment was run on a disposable 20-item fixture database:
-
-| Measurement | Keys examined | Documents examined | Time |
+| Stage | Keys | Documents | Time |
 | --- | ---: | ---: | ---: |
-| No category/expiry index | 0 | 20 | 1 ms |
-| Candidate chosen by optimizer | 6 | 6 | 14 ms |
-| Candidate explicitly hinted | 6 | 6 | 0 ms |
+| Before candidate | 0 | 20 | 0 ms |
+| Candidate categoryId/expiryDate/id index | 1 | 1 | 18 ms |
+| After removing candidate | 0 | 20 | 0 ms |
 
-The index examined fewer documents but the timing sample does not establish a speedup. No production performance index was added. Mustafa's final query is still missing, so the final index decision remains pending.
+One record matched each run. The candidate reduced examined documents, but this tiny workload did not establish a useful timing benefit. We decided to keep correctness indexes only and reconsider if the data grows. A post-decision measurement is recorded.
 
 Evidence: docs/index-evidence.json.
-Reproduce: node api/scripts/measure-index.cjs after building the API.
+Reproduce after building: node api/scripts/measure-index.cjs.
 
-## 8. Tests and working local setup
+## 10. What we tested
 
-Verified:
-- API build passes.
-- All 44 automated tests across 5 suites pass.
-- 12 independent foundation tests pass without MongoDB.
-- Frontend build and lint pass.
-- GET http://localhost:3000/api/categories returns all 7 seeded categories.
-- Swagger at http://localhost:3000/docs returns HTTP 200.
-- Application restart preserves data.
-- A real shutdown/restart of the isolated MongoDB process preserved a stored marker.
+94 tests across 6 suites pass against the real local replica set.
 
-Run from the repository root:
+The integrated suite covers the backend behavior of all eight PDF section 17 cases:
+1. LOW STOCK + USE SOON for quantity 1/minimum 2/expiry +2 days.
+2. Clear rejection of excess stock use.
+3. Correct repeated generation without duplicates.
+4. Normal restock and expired-stock replacement/date requirement.
+5. Pending-entry protection on pantry deletion.
+6. Category-key enforcement and Swagger header documentation.
+7. Data preserved after closing/recreating the backend.
+8. A meaningful committed restock log.
+
+Additional tests verify strict inputs, combined filters, dashboard refresh, immutable snapshots, generation collision rollback, a failed actual history write, and concurrent use/purchase/generation/deletion.
+
+Existing tests still cover numeric ID concurrency, atomic seed recovery, safe errors and date policy. The recorded standalone MongoDB process restart evidence is retained in docs/restart-evidence.json.
+
+API and client builds pass; client lint passes. These checks do not replace the final live frontend walkthrough.
+
+## 11. Run and test
+
+From the repository root:
 
 ```powershell
 npm --prefix api run db:start
@@ -198,48 +168,28 @@ npm --prefix client run build
 npm --prefix client run lint
 ```
 
-Start development:
+Inside api/, run npm run start:dev. Swagger is http://localhost:3000/docs.
 
-```powershell
-cd api
-npm run start:dev
-```
+Use the replica-set URI from api/.env.example. Keep the internal key local and out of Git. If port 3000 is occupied, use the existing development server or stop it before starting another.
 
-The local api/.env was updated to use port 27018 and SEED_ON_START=true while preserving its internal key. It remains ignored by Git. Do not run a second server on port 3000 if the development server is already running.
+Integration tests create and remove their own byb_test_* databases. They do not clear the household development database.
 
-Tests create disposable databases and clean them up. The database restart script validates the exact owned data path before stopping the local test instance.
+## 12. Git history
 
-## 9. Git delivery
+Your original six commits remain intact on member-molham. Allaith's 269413b contribution was already merged into the local integration branch via 1f615b4. Mustafa's 442bde4 contribution is merged with the shared backend fixes and verification.
 
-Each completed implementation group was committed and pushed separately to origin/member-molham:
+The tested integration is pushed to codex/backend-integration and fast-forwarded into member-molham. No teammate branch is rewritten and no force push is used.
 
-| Commit | Purpose |
-| --- | --- |
-| f1f5793 | Shared validation, errors and household date service |
-| 31f57ee | Durable IDs and transactional write coordination |
-| deb20c4 | Guarded category CRUD and contract validation |
-| 3ff4559 | Atomic demo seed with relative dates |
-| 7b074da | Startup, persistence, index evidence and verification tooling |
+## 13. What remains
 
-A separate final documentation commit contains this guide, updated setup instructions, HTTP examples and the integration checklist.
+The backend merge/integration task is finished. Remaining whole-project work:
+- Merge the frontend contributions separately.
+- Complete Mohammad's live API adapter/types and connect all screens.
+- Verify real screen flows and visible loading/error/empty states.
+- Perform the complete visual demo and have every member present in English.
 
-Your earlier category work was built upon and included. Teammates' pantry/shopping business files were not rewritten.
+The requirements PDF is now present in docs/. Its eight backend acceptance behaviors were checked. Earlier notes saying the PDF or teammate backend implementations were unavailable are superseded by this guide.
 
-## 10. Remaining team responsibilities
+## Short English explanation
 
-These are the reasons the entire project cannot honestly be called finished yet:
-
-1. Mustafa must supply the real PantryItemSchema and pantry/dashboard behavior.
-2. Allaith must complete the shopping schema and shared model/session integration. The inspected separate branch lacked normalizedName, a persisted newExpiryDate property and the shared module import.
-3. Both backend owners must pass the same session through all reads and writes under WriteService.
-4. Mohammad must complete the mock/live transport and preserve structured error fields.
-5. Screen owners must verify live frontend flows.
-6. Measure Mustafa's actual stored-field query after it exists.
-7. Run the exact PDF section 17 acceptance cases when that PDF is available. No PDF was present in the inspected project files.
-8. Each team member must present their own work in English.
-
-The contract remains unchanged. docs/integration-results.md records these open checks and the owner for each one. Foundation tests do not prove unfinished business endpoints work.
-
-## Short English presentation
-
-“My responsibility was the backend foundation and category management. I implemented public category reads and protected category changes, with validation and consistent errors. I connected the category model to MongoDB, added safe numeric IDs and a Damascus date service, and built a transaction helper for shared writes. I also added an atomic demo seed that preserves existing data and uses relative expiry dates. I tested category behavior, concurrency, rollback, seeding and persistence with real MongoDB. The remaining integration requires the pantry, shopping and frontend owners to connect their completed features to these shared services.”
+“My responsibility was categories and the shared backend foundation. I implemented strict validation, consistent errors, numeric IDs, a Damascus clock, safe transactions and atomic demo data. I then integrated Mustafa's pantry/dashboard and Allaith's shopping contribution with the same models and transaction boundary. We tested real MongoDB behavior, including stock/history rollback, duplicate purchases, concurrent operations and persistence. The combined backend passes 94 tests. Frontend integration and the final team walkthrough remain.”

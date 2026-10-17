@@ -29,12 +29,16 @@ export class WriteService implements OnModuleInit {
         async () => {
           // Every domain write MUST touch this same document first. Concurrent writes
           // conflict and retry, including deletes versus newly created references.
-          await this.connection
+          const fence = await this.connection
             .collection<{ _id: string; revision: number }>('write_fences')
             .updateOne(
               { _id: 'household' },
               { $inc: { revision: 1 } },
               { session },
+            );
+          if (fence.matchedCount !== 1)
+            throw new Error(
+              'Shared write fence is missing. Restart the API before writing.',
             );
           return operation(session);
         },

@@ -1,24 +1,16 @@
-import { IsString, IsNotEmpty, IsNumber, IsPositive, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsPositive } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Trim } from '../../pantry/dto/validation';
 
 export class CreateManualEntryDto {
-  @ApiProperty({ 
-    description: 'The name of the item to buy (must not duplicate existing pending items)', 
-    example: 'Birthday candles' 
-  })
+  @ApiProperty({ example: 'Birthday candles' })
+  @Trim()
   @IsString()
   @IsNotEmpty()
-  @Transform(({ value }) => value?.trim()) 
   name: string;
 
-  @ApiProperty({ 
-    description: 'The quantity requested to buy (must be a positive number)', 
-    example: 1,
-    minimum: 0.01
-  })
-  @IsNumber({ allowNaN: false, allowInfinity: false }) 
+  @ApiProperty({ example: 1, minimum: 0, exclusiveMinimum: true })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
   @IsPositive()
-  @Min(0.01)
   quantityToBuy: number;
 }

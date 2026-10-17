@@ -1,13 +1,13 @@
 # API implementation status
 
-The authoritative agreement is [Tasks/apicontract.md](../Tasks/apicontract.md). This file is a status summary, not an alternative contract.
+[Tasks/apicontract.md](../Tasks/apicontract.md) remains the authoritative contract.
 
-| Resource | Status |
+| Resource | Integrated status |
 | --- | --- |
-| Categories | GET/POST/PATCH/DELETE implemented and tested with real MongoDB. |
-| Shared foundation | Validation/error envelope, positive ID pipe, clock, durable ID allocator, transaction helper and seed implemented. |
-| Pantry/dashboard | Mustafa's implementation is still needed in this checkout. |
-| Shopping/purchases/history | Allaith's contribution requires integration and contract checks before acceptance. |
-| Frontend/live transport | Screen owners and Mohammad still need to connect and verify their implementations. |
+| Categories | Public GET; guarded POST/PATCH/DELETE; validation, conflicts and usage checks. |
+| Shared foundation | All models registered; clock/ID aliases connected; transactional mutations; atomic seed. |
+| Pantry/dashboard | Mustafa's implementation merged and tested with actual models/services. |
+| Shopping/history | Allaith's contribution merged; mock storage replaced with MongoDB; contract routes, responses, validation and atomic stock/history fixed. |
+| Frontend | Not merged as part of this backend integration; live screen verification remains. |
 
-Use [README](../README.md) for setup, [write-consistency.md](write-consistency.md) for the session protocol, and [integration-results.md](integration-results.md) for evidence and gaps.
+See [README](../README.md), [write protocol](write-consistency.md), and [test evidence](integration-results.md).
