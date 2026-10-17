@@ -8,7 +8,9 @@ export default function ShoppingListPage() {
   const [purchasedData, setPurchasedData] = useState<ShoppingList | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generateMsg, setGenerateMsg] = useState<string | null>(null);
 
   const [manualName, setManualName] = useState("");
   const [manualQty, setManualQty] = useState<number | "">("");
@@ -25,6 +27,8 @@ export default function ShoppingListPage() {
   >({});
   const [isPurchasing, setIsPurchasing] = useState(false);
 
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
   const loadData = async () => {
     setIsLoading(true);
     setError(null);
@@ -35,7 +39,8 @@ export default function ShoppingListPage() {
       ]);
       setPendingData(pending);
       setPurchasedData(purchased);
-    } catch (err: any) {
+    } catch (error) {
+      const err = error as any;
       setError(err.message || "Failed to load shopping list");
     } finally {
       setIsLoading(false);
@@ -49,10 +54,15 @@ export default function ShoppingListPage() {
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError(null);
+    setGenerateMsg(null);
     try {
-      await api.generateShoppingList();
+      const result = await api.generateShoppingList();
+      setGenerateMsg(
+        `List updated. ${result.updated + result.unchanged} pantry items were checked. Added ${result.added}, updated ${result.updated}, unchanged ${result.unchanged}.`,
+      );
       await loadData();
-    } catch (err: any) {
+    } catch (error) {
+      const err = error as any;
       setError(err.message || "Failed to generate list");
     } finally {
       setIsGenerating(false);
@@ -73,7 +83,8 @@ export default function ShoppingListPage() {
       setManualName("");
       setManualQty("");
       await loadData();
-    } catch (err: any) {
+    } catch (error) {
+      const err = error as any;
       setManualError(err.fieldErrors?.name?.[0] || err.message);
     } finally {
       setIsSubmittingManual(false);
@@ -82,16 +93,21 @@ export default function ShoppingListPage() {
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Are you sure you want to remove this entry?")) return;
+    setDeletingId(id);
     try {
       if (purchasingItem?.id === id) setPurchasingItem(null);
       await api.deleteShoppingEntry(id);
       await loadData();
-    } catch (err: any) {
+    } catch (error) {
+      const err = error as any;
       alert(err.message);
+    } finally {
+      setDeletingId(null);
     }
   };
 
   const openPurchasePanel = (item: ShoppingEntry) => {
+    if (isPurchasing || deletingId) return; // منع التبديل أثناء معالجة طلب آخر
     setPurchasingItem(item);
     setPurchaseQty(item.quantityToBuy);
     setPurchaseDate("");
@@ -111,7 +127,8 @@ export default function ShoppingListPage() {
       });
       setPurchasingItem(null);
       await loadData();
-    } catch (err: any) {
+    } catch (error) {
+      const err = error as any;
       if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
         setPurchaseErrors(err.fieldErrors);
       } else {
@@ -153,9 +170,21 @@ export default function ShoppingListPage() {
 
   if (isLoading && !pendingData)
     return <div className="shopping-loading">Loading shopping list...</div>;
-  if (error) return <div className="shopping-error">Error: {error}</div>;
+
+  if (error && !pendingData) {
+    return (
+      <div className="shopping-error">
+        <p style={{ marginBottom: "1rem" }}>Error: {error}</p>
+        <button onClick={loadData} className="shopping-btn-primary">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   const isExpired = purchasingItem?.pantryStatuses.includes("EXPIRED");
+  const isAnyActionRunning =
+    isGenerating || isSubmittingManual || isPurchasing || deletingId !== null;
 
   return (
     <div className="shopping-page">
@@ -169,12 +198,52 @@ export default function ShoppingListPage() {
         </div>
         <button
           onClick={handleGenerate}
-          disabled={isGenerating}
+          disabled={isAnyActionRunning}
           className="shopping-btn-primary"
         >
           {isGenerating ? "Generating..." : "Generate shopping list"}
         </button>
       </div>
+
+      {generateMsg && (
+        <div
+          style={{
+            backgroundColor: "#e6f4ea",
+            color: "#1e4620",
+            padding: "1rem",
+            borderRadius: "0.5rem",
+            border: "1px solid #cce8d6",
+          }}
+        >
+          {generateMsg}
+        </div>
+      )}
+
+      {error && pendingData && (
+        <div
+          style={{
+            backgroundColor: "#fee2e2",
+            color: "#991b1b",
+            padding: "1rem",
+            borderRadius: "0.5rem",
+            display: "flex",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>{error}</span>
+          <button
+            onClick={loadData}
+            style={{
+              fontWeight: "bold",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <section className="shopping-panel">
         <div className="shopping-panel-header">
@@ -205,15 +274,17 @@ export default function ShoppingListPage() {
               <div className="shopping-item-actions">
                 <button
                   onClick={() => openPurchasePanel(item)}
+                  disabled={isAnyActionRunning}
                   className="shopping-btn-primary shopping-btn-small"
                 >
                   Mark purchased
                 </button>
                 <button
                   onClick={() => handleDelete(item.id)}
+                  disabled={isAnyActionRunning}
                   className="shopping-btn-link shopping-btn-remove"
                 >
-                  Remove
+                  {deletingId === item.id ? "Removing..." : "Remove"}
                 </button>
               </div>
             </div>
@@ -233,8 +304,9 @@ export default function ShoppingListPage() {
           <form onSubmit={handleAddManual} className="shopping-form">
             <div className="shopping-form-row">
               <div className="shopping-form-group shopping-flex-1">
-                <label>Name</label>
+                <label htmlFor="manualName">Name</label>
                 <input
+                  id="manualName"
                   type="text"
                   value={manualName}
                   onChange={(e) => setManualName(e.target.value)}
@@ -243,10 +315,11 @@ export default function ShoppingListPage() {
                 />
               </div>
               <div className="shopping-form-group shopping-w-sm">
-                <label>Quantity</label>
+                <label htmlFor="manualQty">Quantity</label>
                 <input
+                  id="manualQty"
                   type="number"
-                  min="0.1"
+                  min="0.001"
                   step="any"
                   value={manualQty}
                   onChange={(e) =>
@@ -262,7 +335,7 @@ export default function ShoppingListPage() {
             )}
             <button
               type="submit"
-              disabled={isSubmittingManual}
+              disabled={isAnyActionRunning}
               className="shopping-btn-dark"
             >
               {isSubmittingManual ? "Adding..." : "Add to list"}
@@ -277,19 +350,24 @@ export default function ShoppingListPage() {
             </h2>
 
             {isExpired && (
-              <p className="shopping-purchase-warning">
+              <p
+                className="shopping-purchase-warning"
+                style={{ color: "#991b1b", fontWeight: 500 }}
+              >
                 The old {purchasingItem.name} is expired, so it is discarded.
-                The new quantity will be exactly what you bought.
+                The new quantity will be exactly what you bought. A new expiry
+                date is required.
               </p>
             )}
 
             <form onSubmit={handleConfirmPurchase} className="shopping-form">
               <div className="shopping-form-row">
                 <div className="shopping-form-group shopping-w-md">
-                  <label>Quantity bought</label>
+                  <label htmlFor="purchaseQty">Quantity bought</label>
                   <input
+                    id="purchaseQty"
                     type="number"
-                    min="0.1"
+                    min="0.001"
                     step="any"
                     value={purchaseQty}
                     onChange={(e) =>
@@ -309,11 +387,16 @@ export default function ShoppingListPage() {
 
                 {purchasingItem.pantryItemId !== null && (
                   <div className="shopping-form-group shopping-flex-1">
-                    <label>New expiry date</label>
+                    <label htmlFor="purchaseDate">
+                      New expiry date{" "}
+                      {isExpired && <span style={{ color: "red" }}>*</span>}
+                    </label>
                     <input
+                      id="purchaseDate"
                       type="date"
                       value={purchaseDate}
                       onChange={(e) => setPurchaseDate(e.target.value)}
+                      required={isExpired}
                       className={`shopping-input ${purchaseErrors.newExpiryDate ? "shopping-input-error" : ""}`}
                     />
                     {purchaseErrors.newExpiryDate && (
@@ -342,6 +425,7 @@ export default function ShoppingListPage() {
                 <button
                   type="button"
                   onClick={() => setPurchasingItem(null)}
+                  disabled={isPurchasing}
                   className="shopping-btn-cancel"
                 >
                   Cancel
