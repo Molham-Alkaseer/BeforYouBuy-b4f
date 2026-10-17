@@ -101,7 +101,7 @@ npm --prefix client run lint
 node api/scripts/measure-index.cjs
 ```
 
-The suite has 94 passing tests across 6 suites, including real MongoDB HTTP tests for all eight PDF section 17 backend demo behaviors. These are API/Swagger-definition/log checks, not a completed visual frontend demonstration. Tests use disposable byb_test_* databases on port 27018.
+The suite has 100 passing tests across 7 suites, including real MongoDB HTTP tests for all eight PDF section 17 backend demo behaviors. These are API/Swagger-definition/log checks, not a completed visual frontend demonstration. Tests use disposable byb_test_* databases on port 27018.
 
 `node api/scripts/verify-db-restart.cjs` verifies a real database process restart. It checks the exact task-owned data path before restarting; run when nobody else is using that local instance. Existing [restart evidence](docs/restart-evidence.json) is retained.
 
@@ -118,3 +118,6 @@ On the 20-item seed, measured 17 October 2026:
 | After decision: candidate removed | 0 | 20 | 0 ms |
 
 One item matched in each run. The candidate reduces examined documents but this tiny sample does not show a useful latency benefit. The decision is to keep correctness indexes only for the current workload and reconsider if it grows. No computed-status index exists. Full plans and the post-decision measurement are in [index-evidence.json](docs/index-evidence.json).
+
+Latest combined frontend/backend status and remaining requirements: [completion review](docs/completion-review.md).
+
