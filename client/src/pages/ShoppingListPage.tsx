@@ -470,6 +470,7 @@ export default function ShoppingListPage() {
             Bought entries stay here with the day they were purchased
           </p>
         </div>
+        <div className="shopping-table-scroll" role="region" aria-label="Purchased history" tabIndex={0}>
         <table className="shopping-table">
           <thead>
             <tr>
@@ -503,6 +504,7 @@ export default function ShoppingListPage() {
             )}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   );

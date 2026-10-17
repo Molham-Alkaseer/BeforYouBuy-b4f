@@ -327,3 +327,55 @@
   text-align: center;
   color: var(--byb-muted);
 }
+
+.shopping-table-scroll {
+  overflow-x: auto;
+}
+
+.shopping-table {
+  min-width: 540px;
+}
+
+@media (max-width: 1100px) {
+  .shopping-header {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .shopping-list-item {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .shopping-item-info,
+  .shopping-item-qty {
+    flex: 1 1 180px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .shopping-item-qty,
+  .shopping-item-actions {
+    justify-content: flex-start;
+    text-align: left;
+    flex-wrap: wrap;
+  }
+
+  .shopping-item-actions {
+    flex: 1 1 100%;
+  }
+
+  .shopping-badges-container {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .shopping-page {
+    padding: 0;
+  }
+
+  .shopping-form-row {
+    flex-wrap: wrap;
+  }
+}
