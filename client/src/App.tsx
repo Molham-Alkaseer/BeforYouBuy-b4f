@@ -7,7 +7,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import { Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
 export default function App() {
- return <><Navbar/><main><Routes>
+ return <><a className="byb-skip" href="#main-content">Skip to content</a><Navbar/><main id="main-content" tabIndex={-1}><Routes>
  <Route path="/" element={<DashboardPage/>}/>
  <Route path="/pantry" element={<PantryPage/>}/>
  <Route path="/pantry/new" element={<ItemFormPage/>}/>

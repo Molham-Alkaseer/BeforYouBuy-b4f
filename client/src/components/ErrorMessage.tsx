@@ -1,1 +1,1 @@
-export default function ErrorMessage({ message }: { message: string }) { return <p role="alert">{message}</p>; }
+export default function ErrorMessage({ message }: { message: string }) { return <p className="byb-message byb-error" role="alert">{message}</p>; }
