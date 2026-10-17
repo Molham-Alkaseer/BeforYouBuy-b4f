@@ -1,7 +1,5 @@
-import { itemApiStub } from './itemApi.stub';
+import { api } from '../../services/api-client';
 import type { ItemsApi } from './itemTypes';
 
-// Our pages import `itemApi` from here only.
-// TEMPORARY: when Mohammad's shared `api` is ready, change this one line
-// to use it instead of the stub.
-export const itemApi: ItemsApi = itemApiStub;
+// All pages share the same live API (or the same explicitly enabled mock state).
+export const itemApi: ItemsApi = api;

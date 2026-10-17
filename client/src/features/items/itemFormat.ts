@@ -15,11 +15,9 @@ export function formatDate(date: string): string {
   return `${day} ${monthName} ${year}`;
 }
 
-// 1 + "litres" -> "1 litre", 2 + "litres" -> "2 litres".
+// Units are free text; preserve the user's spelling.
 export function formatQuantity(quantity: number, unit: string): string {
-  const canShorten = quantity === 1 && unit.length > 2 && unit.endsWith('s');
-  const shownUnit = canShorten && !unit.endsWith('ss') ? unit.slice(0, -1) : unit;
-  return `${quantity} ${shownUnit}`;
+  return `${quantity} ${unit}`;
 }
 
 // Text under the expiry date. Returns null when the item has no expiry date.

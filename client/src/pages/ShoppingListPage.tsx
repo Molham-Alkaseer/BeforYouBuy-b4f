@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api-client";
+import { readApiError } from "../features/items/apiError";
 import { ShoppingList, ShoppingEntry } from "../types";
 import "./shopping-list.css";
 
@@ -40,7 +41,7 @@ export default function ShoppingListPage() {
       setPendingData(pending);
       setPurchasedData(purchased);
     } catch (error) {
-      const err = error as any;
+      const err = readApiError(error);
       setError(err.message || "Failed to load shopping list");
     } finally {
       setIsLoading(false);
@@ -52,17 +53,18 @@ export default function ShoppingListPage() {
   }, []);
 
   const handleGenerate = async () => {
+    if (isAnyActionRunning) return;
     setIsGenerating(true);
     setError(null);
     setGenerateMsg(null);
     try {
       const result = await api.generateShoppingList();
       setGenerateMsg(
-        `List updated. ${result.updated + result.unchanged} pantry items were checked. Added ${result.added}, updated ${result.updated}, unchanged ${result.unchanged}.`,
+        `List updated. Added ${result.added}, updated ${result.updated}, unchanged ${result.unchanged}.`,
       );
       await loadData();
     } catch (error) {
-      const err = error as any;
+      const err = readApiError(error);
       setError(err.message || "Failed to generate list");
     } finally {
       setIsGenerating(false);
@@ -71,7 +73,16 @@ export default function ShoppingListPage() {
 
   const handleAddManual = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualName || manualQty === "") return;
+    if (isAnyActionRunning) return;
+    if (
+      !manualName.trim() ||
+      manualQty === "" ||
+      !Number.isFinite(manualQty) ||
+      manualQty <= 0
+    ) {
+      setManualError("Enter a name and a quantity greater than 0.");
+      return;
+    }
 
     setIsSubmittingManual(true);
     setManualError(null);
@@ -84,7 +95,7 @@ export default function ShoppingListPage() {
       setManualQty("");
       await loadData();
     } catch (error) {
-      const err = error as any;
+      const err = readApiError(error);
       setManualError(err.fieldErrors?.name?.[0] || err.message);
     } finally {
       setIsSubmittingManual(false);
@@ -92,6 +103,7 @@ export default function ShoppingListPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (isAnyActionRunning) return;
     if (!window.confirm("Are you sure you want to remove this entry?")) return;
     setDeletingId(id);
     try {
@@ -99,7 +111,7 @@ export default function ShoppingListPage() {
       await api.deleteShoppingEntry(id);
       await loadData();
     } catch (error) {
-      const err = error as any;
+      const err = readApiError(error);
       alert(err.message);
     } finally {
       setDeletingId(null);
@@ -107,7 +119,7 @@ export default function ShoppingListPage() {
   };
 
   const openPurchasePanel = (item: ShoppingEntry) => {
-    if (isPurchasing || deletingId) return; // منع التبديل أثناء معالجة طلب آخر
+    if (isAnyActionRunning) return; // منع التبديل أثناء معالجة طلب آخر
     setPurchasingItem(item);
     setPurchaseQty(item.quantityToBuy);
     setPurchaseDate("");
@@ -116,7 +128,17 @@ export default function ShoppingListPage() {
 
   const handleConfirmPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!purchasingItem || purchaseQty === "") return;
+    if (isAnyActionRunning || !purchasingItem) return;
+    if (
+      purchaseQty === "" ||
+      !Number.isFinite(purchaseQty) ||
+      purchaseQty <= 0
+    ) {
+      setPurchaseErrors({
+        purchasedQuantity: ["Quantity must be greater than 0."],
+      });
+      return;
+    }
 
     setIsPurchasing(true);
     setPurchaseErrors({});
@@ -128,7 +150,7 @@ export default function ShoppingListPage() {
       setPurchasingItem(null);
       await loadData();
     } catch (error) {
-      const err = error as any;
+      const err = readApiError(error);
       if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
         setPurchaseErrors(err.fieldErrors);
       } else {
@@ -144,6 +166,7 @@ export default function ShoppingListPage() {
       day: "numeric",
       month: "short",
       year: "numeric",
+      timeZone: "Asia/Damascus",
     });
   };
 
@@ -184,7 +207,11 @@ export default function ShoppingListPage() {
 
   const isExpired = purchasingItem?.pantryStatuses.includes("EXPIRED");
   const isAnyActionRunning =
-    isGenerating || isSubmittingManual || isPurchasing || deletingId !== null;
+    isLoading ||
+    isGenerating ||
+    isSubmittingManual ||
+    isPurchasing ||
+    deletingId !== null;
 
   return (
     <div className="shopping-page">
@@ -319,7 +346,7 @@ export default function ShoppingListPage() {
                 <input
                   id="manualQty"
                   type="number"
-                  min="0.001"
+                  min="0"
                   step="any"
                   value={manualQty}
                   onChange={(e) =>
@@ -367,7 +394,7 @@ export default function ShoppingListPage() {
                   <input
                     id="purchaseQty"
                     type="number"
-                    min="0.001"
+                    min="0"
                     step="any"
                     value={purchaseQty}
                     onChange={(e) =>
@@ -417,7 +444,7 @@ export default function ShoppingListPage() {
               <div className="shopping-form-actions">
                 <button
                   type="submit"
-                  disabled={isPurchasing}
+                  disabled={isAnyActionRunning}
                   className="shopping-btn-primary"
                 >
                   {isPurchasing ? "Confirming..." : "Confirm purchase"}
@@ -425,7 +452,7 @@ export default function ShoppingListPage() {
                 <button
                   type="button"
                   onClick={() => setPurchasingItem(null)}
-                  disabled={isPurchasing}
+                  disabled={isAnyActionRunning}
                   className="shopping-btn-cancel"
                 >
                   Cancel
