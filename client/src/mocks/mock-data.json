@@ -1,0 +1,574 @@
+{
+  "fixtureDate": "2026-10-16",
+  "categories": {
+    "items": [
+      { "id": 1, "name": "Dairy" },
+      { "id": 2, "name": "Produce" },
+      { "id": 3, "name": "Meat & Fish" },
+      { "id": 4, "name": "Frozen" },
+      { "id": 5, "name": "Grains & Pasta" },
+      { "id": 6, "name": "Pantry staples" },
+      { "id": 7, "name": "Drinks" }
+    ]
+  },
+  "pantry": {
+    "asOfDate": "2026-10-16",
+    "items": [
+      {
+        "id": 1,
+        "name": "Milk",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "quantity": 1,
+        "unit": "litres",
+        "minimumQuantity": 2,
+        "expiryDate": "2026-10-18",
+        "statuses": ["LOW STOCK", "USE SOON"],
+        "statusReasons": [
+          "1 litres below the minimum of 2 litres",
+          "Expires in 2 days"
+        ],
+        "daysUntilExpiry": 2
+      },
+      {
+        "id": 2,
+        "name": "Yoghurt",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "quantity": 2,
+        "unit": "pots",
+        "minimumQuantity": 3,
+        "expiryDate": "2026-10-15",
+        "statuses": ["LOW STOCK", "EXPIRED"],
+        "statusReasons": [
+          "1 pots below the minimum of 3 pots",
+          "Expired 1 day ago"
+        ],
+        "daysUntilExpiry": -1
+      },
+      {
+        "id": 3,
+        "name": "Cream cheese",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "quantity": 1,
+        "unit": "tubs",
+        "minimumQuantity": 1,
+        "expiryDate": "2026-10-13",
+        "statuses": ["EXPIRED"],
+        "statusReasons": ["Expired 3 days ago"],
+        "daysUntilExpiry": -3
+      },
+      {
+        "id": 4,
+        "name": "Butter",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "quantity": 2,
+        "unit": "packs",
+        "minimumQuantity": 1,
+        "expiryDate": "2026-11-25",
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": 40
+      },
+      {
+        "id": 5,
+        "name": "Cheddar",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "quantity": 1,
+        "unit": "blocks",
+        "minimumQuantity": 1,
+        "expiryDate": "2026-10-28",
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": 12
+      },
+      {
+        "id": 6,
+        "name": "Eggs",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "quantity": 4,
+        "unit": "pieces",
+        "minimumQuantity": 6,
+        "expiryDate": "2026-10-25",
+        "statuses": ["LOW STOCK"],
+        "statusReasons": ["2 pieces below the minimum of 6 pieces"],
+        "daysUntilExpiry": 9
+      },
+      {
+        "id": 7,
+        "name": "Spinach",
+        "categoryId": 2,
+        "categoryName": "Produce",
+        "quantity": 1,
+        "unit": "bags",
+        "minimumQuantity": 1,
+        "expiryDate": "2026-10-19",
+        "statuses": ["USE SOON"],
+        "statusReasons": ["Expires in 3 days"],
+        "daysUntilExpiry": 3
+      },
+      {
+        "id": 8,
+        "name": "Tomatoes",
+        "categoryId": 2,
+        "categoryName": "Produce",
+        "quantity": 6,
+        "unit": "pieces",
+        "minimumQuantity": 4,
+        "expiryDate": "2026-10-21",
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": 5
+      },
+      {
+        "id": 9,
+        "name": "Apples",
+        "categoryId": 2,
+        "categoryName": "Produce",
+        "quantity": 8,
+        "unit": "pieces",
+        "minimumQuantity": 4,
+        "expiryDate": "2026-10-25",
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": 9
+      },
+      {
+        "id": 10,
+        "name": "Carrots",
+        "categoryId": 2,
+        "categoryName": "Produce",
+        "quantity": 1.5,
+        "unit": "kg",
+        "minimumQuantity": 1,
+        "expiryDate": "2026-10-30",
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": 14
+      },
+      {
+        "id": 11,
+        "name": "Chicken breast",
+        "categoryId": 3,
+        "categoryName": "Meat & Fish",
+        "quantity": 0.8,
+        "unit": "kg",
+        "minimumQuantity": 0.5,
+        "expiryDate": "2026-10-17",
+        "statuses": ["USE SOON"],
+        "statusReasons": ["Expires in 1 day"],
+        "daysUntilExpiry": 1
+      },
+      {
+        "id": 12,
+        "name": "Salmon fillets",
+        "categoryId": 4,
+        "categoryName": "Frozen",
+        "quantity": 2,
+        "unit": "pieces",
+        "minimumQuantity": 2,
+        "expiryDate": "2026-12-15",
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": 60
+      },
+      {
+        "id": 13,
+        "name": "Rice",
+        "categoryId": 5,
+        "categoryName": "Grains & Pasta",
+        "quantity": 4,
+        "unit": "kg",
+        "minimumQuantity": 2,
+        "expiryDate": null,
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": null
+      },
+      {
+        "id": 14,
+        "name": "Pasta",
+        "categoryId": 5,
+        "categoryName": "Grains & Pasta",
+        "quantity": 3,
+        "unit": "packs",
+        "minimumQuantity": 2,
+        "expiryDate": null,
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": null
+      },
+      {
+        "id": 15,
+        "name": "Lentils",
+        "categoryId": 5,
+        "categoryName": "Grains & Pasta",
+        "quantity": 0.5,
+        "unit": "kg",
+        "minimumQuantity": 1,
+        "expiryDate": null,
+        "statuses": ["LOW STOCK"],
+        "statusReasons": ["0.5 kg below the minimum of 1 kg"],
+        "daysUntilExpiry": null
+      },
+      {
+        "id": 16,
+        "name": "Olive oil",
+        "categoryId": 6,
+        "categoryName": "Pantry staples",
+        "quantity": 0.3,
+        "unit": "litres",
+        "minimumQuantity": 0.5,
+        "expiryDate": "2027-05-04",
+        "statuses": ["LOW STOCK"],
+        "statusReasons": ["0.2 litres below the minimum of 0.5 litres"],
+        "daysUntilExpiry": 200
+      },
+      {
+        "id": 17,
+        "name": "Flour",
+        "categoryId": 6,
+        "categoryName": "Pantry staples",
+        "quantity": 2,
+        "unit": "kg",
+        "minimumQuantity": 1,
+        "expiryDate": "2027-02-13",
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": 120
+      },
+      {
+        "id": 18,
+        "name": "Sugar",
+        "categoryId": 6,
+        "categoryName": "Pantry staples",
+        "quantity": 1,
+        "unit": "kg",
+        "minimumQuantity": 1,
+        "expiryDate": null,
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": null
+      },
+      {
+        "id": 19,
+        "name": "Orange juice",
+        "categoryId": 7,
+        "categoryName": "Drinks",
+        "quantity": 2,
+        "unit": "litres",
+        "minimumQuantity": 1,
+        "expiryDate": "2026-10-26",
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": 10
+      },
+      {
+        "id": 20,
+        "name": "Green tea",
+        "categoryId": 7,
+        "categoryName": "Drinks",
+        "quantity": 20,
+        "unit": "bags",
+        "minimumQuantity": 10,
+        "expiryDate": "2027-08-12",
+        "statuses": ["OK"],
+        "statusReasons": ["Stock is sufficient and no expiry action is needed"],
+        "daysUntilExpiry": 300
+      }
+    ],
+    "total": 20
+  },
+  "shoppingPending": {
+    "asOfDate": "2026-10-16",
+    "items": [
+      {
+        "id": 101,
+        "name": "Milk",
+        "quantityToBuy": 1,
+        "unit": "litres",
+        "pantryItemId": 1,
+        "status": "Pending",
+        "createdAt": "2026-10-16T08:00:00.000Z",
+        "purchasedAt": null,
+        "purchasedQuantity": null,
+        "newExpiryDate": null,
+        "pantryStatuses": ["LOW STOCK", "USE SOON"]
+      },
+      {
+        "id": 102,
+        "name": "Yoghurt",
+        "quantityToBuy": 3,
+        "unit": "pots",
+        "pantryItemId": 2,
+        "status": "Pending",
+        "createdAt": "2026-10-16T08:00:00.000Z",
+        "purchasedAt": null,
+        "purchasedQuantity": null,
+        "newExpiryDate": null,
+        "pantryStatuses": ["LOW STOCK", "EXPIRED"]
+      },
+      {
+        "id": 103,
+        "name": "Cream cheese",
+        "quantityToBuy": 1,
+        "unit": "tubs",
+        "pantryItemId": 3,
+        "status": "Pending",
+        "createdAt": "2026-10-16T08:00:00.000Z",
+        "purchasedAt": null,
+        "purchasedQuantity": null,
+        "newExpiryDate": null,
+        "pantryStatuses": ["EXPIRED"]
+      },
+      {
+        "id": 104,
+        "name": "Eggs",
+        "quantityToBuy": 2,
+        "unit": "pieces",
+        "pantryItemId": 6,
+        "status": "Pending",
+        "createdAt": "2026-10-16T08:00:00.000Z",
+        "purchasedAt": null,
+        "purchasedQuantity": null,
+        "newExpiryDate": null,
+        "pantryStatuses": ["LOW STOCK"]
+      },
+      {
+        "id": 105,
+        "name": "Lentils",
+        "quantityToBuy": 1,
+        "unit": "kg",
+        "pantryItemId": 15,
+        "status": "Pending",
+        "createdAt": "2026-10-16T08:00:00.000Z",
+        "purchasedAt": null,
+        "purchasedQuantity": null,
+        "newExpiryDate": null,
+        "pantryStatuses": ["LOW STOCK"]
+      },
+      {
+        "id": 106,
+        "name": "Olive oil",
+        "quantityToBuy": 1,
+        "unit": "litres",
+        "pantryItemId": 16,
+        "status": "Pending",
+        "createdAt": "2026-10-16T08:00:00.000Z",
+        "purchasedAt": null,
+        "purchasedQuantity": null,
+        "newExpiryDate": null,
+        "pantryStatuses": ["LOW STOCK"]
+      },
+      {
+        "id": 107,
+        "name": "Birthday candles",
+        "quantityToBuy": 1,
+        "unit": null,
+        "pantryItemId": null,
+        "status": "Pending",
+        "createdAt": "2026-10-16T08:00:00.000Z",
+        "purchasedAt": null,
+        "purchasedQuantity": null,
+        "newExpiryDate": null,
+        "pantryStatuses": []
+      }
+    ],
+    "total": 7,
+    "pendingSummary": {
+      "total": 7,
+      "linked": 6,
+      "manual": 1
+    }
+  },
+  "shoppingPurchased": {
+    "asOfDate": "2026-10-16",
+    "items": [
+      {
+        "id": 205,
+        "name": "Milk",
+        "quantityToBuy": 2,
+        "unit": "litres",
+        "pantryItemId": 1,
+        "status": "Purchased",
+        "createdAt": "2026-10-06T08:00:00.000Z",
+        "purchasedAt": "2026-10-09T10:00:00.000Z",
+        "purchasedQuantity": 2,
+        "newExpiryDate": "2026-10-19",
+        "pantryStatuses": []
+      },
+      {
+        "id": 202,
+        "name": "Pasta",
+        "quantityToBuy": 2,
+        "unit": "packs",
+        "pantryItemId": 14,
+        "status": "Purchased",
+        "createdAt": "2026-10-06T08:00:00.000Z",
+        "purchasedAt": "2026-10-09T10:00:00.000Z",
+        "purchasedQuantity": 2,
+        "newExpiryDate": null,
+        "pantryStatuses": []
+      },
+      {
+        "id": 201,
+        "name": "Rice",
+        "quantityToBuy": 2,
+        "unit": "kg",
+        "pantryItemId": 13,
+        "status": "Purchased",
+        "createdAt": "2026-10-06T08:00:00.000Z",
+        "purchasedAt": "2026-10-09T10:00:00.000Z",
+        "purchasedQuantity": 2,
+        "newExpiryDate": null,
+        "pantryStatuses": []
+      },
+      {
+        "id": 204,
+        "name": "Milk",
+        "quantityToBuy": 2,
+        "unit": "litres",
+        "pantryItemId": 1,
+        "status": "Purchased",
+        "createdAt": "2026-09-29T08:00:00.000Z",
+        "purchasedAt": "2026-10-02T10:00:00.000Z",
+        "purchasedQuantity": 2,
+        "newExpiryDate": "2026-10-12",
+        "pantryStatuses": []
+      },
+      {
+        "id": 203,
+        "name": "Butter",
+        "quantityToBuy": 1,
+        "unit": "packs",
+        "pantryItemId": 4,
+        "status": "Purchased",
+        "createdAt": "2026-09-29T08:00:00.000Z",
+        "purchasedAt": "2026-10-02T10:00:00.000Z",
+        "purchasedQuantity": 1,
+        "newExpiryDate": "2026-11-25",
+        "pantryStatuses": []
+      },
+      {
+        "id": 206,
+        "name": "Milk",
+        "quantityToBuy": 3,
+        "unit": "litres",
+        "pantryItemId": 1,
+        "status": "Purchased",
+        "createdAt": "2026-09-23T08:00:00.000Z",
+        "purchasedAt": "2026-09-25T10:00:00.000Z",
+        "purchasedQuantity": 3,
+        "newExpiryDate": "2026-10-06",
+        "pantryStatuses": []
+      }
+    ],
+    "total": 6,
+    "pendingSummary": {
+      "total": 7,
+      "linked": 6,
+      "manual": 1
+    }
+  },
+  "dashboard": {
+    "asOfDate": "2026-10-16",
+    "totalItems": 20,
+    "statusCounts": {
+      "LOW STOCK": 5,
+      "USE SOON": 3,
+      "EXPIRED": 2,
+      "OK": 12
+    },
+    "urgentItems": [
+      {
+        "id": 3,
+        "name": "Cream cheese",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "quantity": 1,
+        "unit": "tubs",
+        "minimumQuantity": 1,
+        "expiryDate": "2026-10-13",
+        "statuses": ["EXPIRED"],
+        "statusReasons": ["Expired 3 days ago"],
+        "daysUntilExpiry": -3
+      },
+      {
+        "id": 2,
+        "name": "Yoghurt",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "quantity": 2,
+        "unit": "pots",
+        "minimumQuantity": 3,
+        "expiryDate": "2026-10-15",
+        "statuses": ["LOW STOCK", "EXPIRED"],
+        "statusReasons": [
+          "1 pots below the minimum of 3 pots",
+          "Expired 1 day ago"
+        ],
+        "daysUntilExpiry": -1
+      },
+      {
+        "id": 11,
+        "name": "Chicken breast",
+        "categoryId": 3,
+        "categoryName": "Meat & Fish",
+        "quantity": 0.8,
+        "unit": "kg",
+        "minimumQuantity": 0.5,
+        "expiryDate": "2026-10-17",
+        "statuses": ["USE SOON"],
+        "statusReasons": ["Expires in 1 day"],
+        "daysUntilExpiry": 1
+      },
+      {
+        "id": 1,
+        "name": "Milk",
+        "categoryId": 1,
+        "categoryName": "Dairy",
+        "quantity": 1,
+        "unit": "litres",
+        "minimumQuantity": 2,
+        "expiryDate": "2026-10-18",
+        "statuses": ["LOW STOCK", "USE SOON"],
+        "statusReasons": [
+          "1 litres below the minimum of 2 litres",
+          "Expires in 2 days"
+        ],
+        "daysUntilExpiry": 2
+      },
+      {
+        "id": 7,
+        "name": "Spinach",
+        "categoryId": 2,
+        "categoryName": "Produce",
+        "quantity": 1,
+        "unit": "bags",
+        "minimumQuantity": 1,
+        "expiryDate": "2026-10-19",
+        "statuses": ["USE SOON"],
+        "statusReasons": ["Expires in 3 days"],
+        "daysUntilExpiry": 3
+      }
+    ],
+    "pendingShopping": {
+      "total": 7,
+      "linked": 6,
+      "manual": 1
+    },
+    "categoryCounts": [
+      { "categoryId": 1, "categoryName": "Dairy", "count": 6 },
+      { "categoryId": 2, "categoryName": "Produce", "count": 4 },
+      { "categoryId": 3, "categoryName": "Meat & Fish", "count": 1 },
+      { "categoryId": 4, "categoryName": "Frozen", "count": 1 },
+      { "categoryId": 5, "categoryName": "Grains & Pasta", "count": 3 },
+      { "categoryId": 6, "categoryName": "Pantry staples", "count": 3 },
+      { "categoryId": 7, "categoryName": "Drinks", "count": 2 }
+    ]
+  }
+}
