@@ -1,11 +1,13 @@
 import rawFixture from "./mock-data.json";
 import {
-  ApiClient,
   ApiError,
   Category,
   CategoryList,
   Dashboard,
   GenerateResult,
+  HouseholdRole,
+  LoginInput,
+  LoginResult,
   PantryInput,
   PantryItem,
   PantryList,
@@ -15,6 +17,8 @@ import {
   PendingSummary,
   PurchaseInput,
   PurchaseResult,
+  RegisterInput,
+  SafeUser,
   ShoppingEntry,
   ShoppingList,
   ShoppingQuery,
@@ -53,19 +57,89 @@ interface StoredShoppingRecord {
   newExpiryDate: string | null;
 }
 
+interface MockAccount {
+  id: number;
+  email: string;
+  password: string;
+  name: string;
+  role: HouseholdRole;
+}
+
+interface MockSession {
+  token: string | null;
+  user: SafeUser | null;
+}
+
 interface MockState {
   categories: Category[];
   pantryItems: StoredPantryRecord[];
   shoppingEntries: StoredShoppingRecord[];
+  accounts: MockAccount[];
+  session: MockSession;
   nextCategoryId: number;
   nextPantryId: number;
   nextShoppingId: number;
+  nextAccountId: number;
 }
 
 const simulationConfig: MockSimulationConfig = {
   latencyMs: 0,
   mode: "normal",
 };
+
+const MOCK_ACCOUNTS: MockAccount[] = [
+  {
+    id: 1,
+    email: "member@example.com",
+    password: "member123",
+    name: "Member User",
+    role: "member",
+  },
+  {
+    id: 2,
+    email: "admin@example.com",
+    password: "admin123",
+    name: "Admin User",
+    role: "admin",
+  },
+  {
+    id: 3,
+    email: "owner@example.com",
+    password: "owner123",
+    name: "Owner User",
+    role: "owner",
+  },
+];
+
+const MOCK_TOKEN_PREFIX = "mock-token-";
+
+function makeMockToken(userId: number): string {
+  return `${MOCK_TOKEN_PREFIX}${userId}-${Date.now()}`;
+}
+
+function findAccountByEmail(email: string): MockAccount | undefined {
+  return state.accounts.find((a) => a.email.toLowerCase() === email.trim().toLowerCase());
+}
+
+function requireRole(allowedRoles: HouseholdRole[]): void {
+  const user = state.session.user;
+  if (!user) {
+    throw new ApiError({
+      statusCode: 401,
+      code: "UNAUTHENTICATED",
+      message: "You must be signed in to perform this action.",
+      fieldErrors: {},
+    });
+  }
+  if (!allowedRoles.includes(user.role)) {
+    throw new ApiError({
+      statusCode: 403,
+      code: "FORBIDDEN",
+      message: "You do not have permission to perform this action.",
+      fieldErrors: {},
+    });
+  }
+}
 
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
@@ -204,9 +278,12 @@ function createInitialState(): MockState {
     categories,
     pantryItems,
     shoppingEntries: [...pendingEntries, ...purchasedEntries],
+    accounts: [...MOCK_ACCOUNTS],
+    session: { token: null, user: null },
     nextCategoryId: 8,
     nextPantryId: 21,
     nextShoppingId: 207,
+    nextAccountId: 4,
   };
 }
 
@@ -363,7 +440,7 @@ function validateIdParam(id: number, codeIfInvalid = "VALIDATION_ERROR"): void {
   }
 }
 
-export const mockApi: ApiClient = {
+export const mockApi = {
   async listCategories(): Promise<CategoryList> {
     await applySimulationGate();
     if (simulationConfig.mode === "empty") {
@@ -701,6 +778,7 @@ export const mockApi: ApiClient = {
 
   async deletePantryItem(id: number): Promise<void> {
     await applySimulationGate();
+    requireRole(["admin", "owner"]);
     validateIdParam(id);
 
     const index = state.pantryItems.findIndex((item) => item.id === id);
@@ -1142,6 +1220,7 @@ export const mockApi: ApiClient = {
 
   async deleteShoppingEntry(id: number): Promise<void> {
     await applySimulationGate();
+    requireRole(["admin", "owner"]);
     validateIdParam(id);
 
     const index = state.shoppingEntries.findIndex((e) => e.id === id);
@@ -1165,5 +1244,96 @@ export const mockApi: ApiClient = {
     }
 
     state.shoppingEntries.splice(index, 1);
+  },
+
+  async register(input: RegisterInput): Promise<SafeUser> {
+    await applySimulationGate();
+
+    const trimmedEmail = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+    if (!trimmedEmail) {
+      throw new ApiError({
+        statusCode: 400,
+        code: "VALIDATION_ERROR",
+        message: "Email is required.",
+        fieldErrors: { email: ["Email is required."] },
+      });
+    }
+    if (typeof input.password !== "string" || input.password.length < 6) {
+      throw new ApiError({
+        statusCode: 400,
+        code: "VALIDATION_ERROR",
+        message: "Password must be at least 6 characters.",
+        fieldErrors: { password: ["Password must be at least 6 characters."] },
+      });
+    }
+
+    const existing = findAccountByEmail(trimmedEmail);
+    if (existing) {
+      throw new ApiError({
+        statusCode: 409,
+        code: "EMAIL_CONFLICT",
+        message: "An account with this email already exists.",
+        fieldErrors: { email: ["An account with this email already exists."] },
+      });
+    }
+
+    const newAccount: MockAccount = {
+      id: state.nextAccountId++,
+      email: trimmedEmail,
+      password: input.password,
+      name: trimmedEmail.split("@")[0],
+      role: "member",
+    };
+    state.accounts.push(newAccount);
+
+    return {
+      id: newAccount.id,
+      email: newAccount.email,
+      name: newAccount.name,
+      role: newAccount.role,
+    };
+  },
+
+  async login(input: LoginInput): Promise<LoginResult> {
+    await applySimulationGate();
+
+    const trimmedEmail = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+    const account = findAccountByEmail(trimmedEmail);
+    if (!account || account.password !== input.password) {
+      throw new ApiError({
+        statusCode: 401,
+        code: "INVALID_CREDENTIALS",
+        message: "Invalid email or password.",
+        fieldErrors: {},
+      });
+    }
+
+    const token = makeMockToken(account.id);
+    const user: SafeUser = {
+      id: account.id,
+      email: account.email,
+      name: account.name,
+      role: account.role,
+    };
+
+    state.session.token = token;
+    state.session.user = user;
+
+    return { token, user };
+  },
+
+  async me(): Promise<SafeUser> {
+    await applySimulationGate();
+
+    if (!state.session.token || !state.session.user) {
+      throw new ApiError({
+        statusCode: 401,
+        code: "UNAUTHENTICATED",
+        message: "No active session.",
+        fieldErrors: {},
+      });
+    }
+
+    return deepClone(state.session.user);
   },
 };

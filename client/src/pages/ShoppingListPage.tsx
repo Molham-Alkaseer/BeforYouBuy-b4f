@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api-client";
+import { useAuth } from "../features/session/useAuth";
 import { readApiError } from "../features/items/apiError";
 import { ShoppingList, ShoppingEntry } from "../types";
 import "./shopping-list.css";
 
 export default function ShoppingListPage() {
+  const { status, user } = useAuth();
+  const isAuthenticated = status === "authenticated";
+  const isAdminOrOwner =
+    isAuthenticated &&
+    (user?.role === "admin" || user?.role === "owner");
+
   const [pendingData, setPendingData] = useState<ShoppingList | null>(null);
   const [purchasedData, setPurchasedData] = useState<ShoppingList | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,6 +36,7 @@ export default function ShoppingListPage() {
   const [isPurchasing, setIsPurchasing] = useState(false);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -42,7 +50,12 @@ export default function ShoppingListPage() {
       setPurchasedData(purchased);
     } catch (error) {
       const err = readApiError(error);
-      setError(err.message || "Failed to load shopping list");
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
+        setAuthMessage("Please sign in to continue shopping.");
+      } else {
+        setError(err.message || "Failed to load shopping list");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -52,8 +65,25 @@ export default function ShoppingListPage() {
     loadData();
   }, []);
 
+  const isAnyActionRunning =
+    isLoading ||
+    isGenerating ||
+    isSubmittingManual ||
+    isPurchasing ||
+    deletingId !== null;
+
+  const requireSignIn = () => {
+    setAuthMessage(
+      "Please sign in to generate, add, or purchase shopping entries.",
+    );
+  };
+
   const handleGenerate = async () => {
     if (isAnyActionRunning) return;
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
     setIsGenerating(true);
     setError(null);
     setGenerateMsg(null);
@@ -65,7 +95,11 @@ export default function ShoppingListPage() {
       await loadData();
     } catch (error) {
       const err = readApiError(error);
-      setError(err.message || "Failed to generate list");
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
+      } else {
+        setError(err.message || "Failed to generate list");
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -74,6 +108,10 @@ export default function ShoppingListPage() {
   const handleAddManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAnyActionRunning) return;
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
     if (
       !manualName.trim() ||
       manualQty === "" ||
@@ -96,7 +134,11 @@ export default function ShoppingListPage() {
       await loadData();
     } catch (error) {
       const err = readApiError(error);
-      setManualError(err.fieldErrors?.name?.[0] || err.message);
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
+      } else {
+        setManualError(err.fieldErrors?.name?.[0] || err.message);
+      }
     } finally {
       setIsSubmittingManual(false);
     }
@@ -104,6 +146,7 @@ export default function ShoppingListPage() {
 
   const handleDelete = async (id: number) => {
     if (isAnyActionRunning) return;
+    if (!isAdminOrOwner) return;
     if (!window.confirm("Are you sure you want to remove this entry?")) return;
     setDeletingId(id);
     try {
@@ -112,14 +155,24 @@ export default function ShoppingListPage() {
       await loadData();
     } catch (error) {
       const err = readApiError(error);
-      alert(err.message);
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
+      } else if (err.statusCode === 403) {
+        setError("You do not have permission to remove this entry.");
+      } else {
+        alert(err.message);
+      }
     } finally {
       setDeletingId(null);
     }
   };
 
   const openPurchasePanel = (item: ShoppingEntry) => {
-    if (isAnyActionRunning) return; // منع التبديل أثناء معالجة طلب آخر
+    if (isAnyActionRunning) return;
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
     setPurchasingItem(item);
     setPurchaseQty(item.quantityToBuy);
     setPurchaseDate("");
@@ -129,6 +182,10 @@ export default function ShoppingListPage() {
   const handleConfirmPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAnyActionRunning || !purchasingItem) return;
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
     if (
       purchaseQty === "" ||
       !Number.isFinite(purchaseQty) ||
@@ -151,10 +208,14 @@ export default function ShoppingListPage() {
       await loadData();
     } catch (error) {
       const err = readApiError(error);
-      if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
-        setPurchaseErrors(err.fieldErrors);
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
       } else {
-        setPurchaseErrors({ general: [err.message] });
+        if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+          setPurchaseErrors(err.fieldErrors);
+        } else {
+          setPurchaseErrors({ general: [err.message] });
+        }
       }
     } finally {
       setIsPurchasing(false);
@@ -191,6 +252,8 @@ export default function ShoppingListPage() {
     });
   };
 
+  const isExpired = purchasingItem?.pantryStatuses.includes("EXPIRED");
+
   if (isLoading && !pendingData)
     return <div className="shopping-loading">Loading shopping list...</div>;
 
@@ -198,20 +261,18 @@ export default function ShoppingListPage() {
     return (
       <div className="shopping-error">
         <p style={{ marginBottom: "1rem" }}>Error: {error}</p>
-        <button onClick={loadData} className="shopping-btn-primary">
-          Retry
-        </button>
+        {isAuthenticated ? (
+          <button onClick={loadData} className="shopping-btn-primary">
+            Retry
+          </button>
+        ) : (
+          <button onClick={requireSignIn} className="shopping-btn-primary">
+            Sign in
+          </button>
+        )}
       </div>
     );
   }
-
-  const isExpired = purchasingItem?.pantryStatuses.includes("EXPIRED");
-  const isAnyActionRunning =
-    isLoading ||
-    isGenerating ||
-    isSubmittingManual ||
-    isPurchasing ||
-    deletingId !== null;
 
   return (
     <div className="shopping-page">
@@ -223,13 +284,23 @@ export default function ShoppingListPage() {
             generate again never adds an item twice
           </p>
         </div>
-        <button
-          onClick={handleGenerate}
-          disabled={isAnyActionRunning}
-          className="shopping-btn-primary"
-        >
-          {isGenerating ? "Generating..." : "Generate shopping list"}
-        </button>
+        {isAuthenticated ? (
+          <button
+            onClick={handleGenerate}
+            disabled={isAnyActionRunning}
+            className="shopping-btn-primary"
+          >
+            {isGenerating ? "Generating..." : "Generate shopping list"}
+          </button>
+        ) : (
+          <button
+            onClick={requireSignIn}
+            disabled={isAnyActionRunning}
+            className="shopping-btn-primary"
+          >
+            Sign in to generate
+          </button>
+        )}
       </div>
 
       {generateMsg && (
@@ -243,6 +314,21 @@ export default function ShoppingListPage() {
           }}
         >
           {generateMsg}
+        </div>
+      )}
+
+      {authMessage && (
+        <div
+          style={{
+            backgroundColor: "#fffbeb",
+            color: "#713f12",
+            padding: "1rem",
+            borderRadius: "0.5rem",
+            border: "1px solid #fde68a",
+            marginBottom: "1rem",
+          }}
+        >
+          {authMessage}
         </div>
       )}
 
@@ -286,8 +372,7 @@ export default function ShoppingListPage() {
               <div className="shopping-item-info">
                 <h3 className="shopping-item-name">{item.name}</h3>
                 <p className="shopping-item-meta">
-                  {item.pantryItemId ? "From your pantry" : "Not a pantry item"}{" "}
-                  · created {formatDate(item.createdAt)}
+                  {item.pantryItemId ? "From your pantry" : "Not a pantry item"}· created {formatDate(item.createdAt)}
                 </p>
               </div>
               <div className="shopping-item-qty">
@@ -301,18 +386,20 @@ export default function ShoppingListPage() {
               <div className="shopping-item-actions">
                 <button
                   onClick={() => openPurchasePanel(item)}
-                  disabled={isAnyActionRunning}
+                  disabled={isAnyActionRunning || !isAuthenticated}
                   className="shopping-btn-primary shopping-btn-small"
                 >
-                  Mark purchased
+                  {isAuthenticated ? "Mark purchased" : "Sign in to purchase"}
                 </button>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  disabled={isAnyActionRunning}
-                  className="shopping-btn-link shopping-btn-remove"
-                >
-                  {deletingId === item.id ? "Removing..." : "Remove"}
-                </button>
+                {isAdminOrOwner && (
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    disabled={isAnyActionRunning || !isAuthenticated}
+                    className="shopping-btn-link shopping-btn-remove"
+                  >
+                    {deletingId === item.id ? "Removing..." : "Remove"}
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -328,46 +415,52 @@ export default function ShoppingListPage() {
           <p className="shopping-panel-desc">
             For things that are not pantry items, like birthday candles.
           </p>
-          <form onSubmit={handleAddManual} className="shopping-form">
-            <div className="shopping-form-row">
-              <div className="shopping-form-group shopping-flex-1">
-                <label htmlFor="manualName">Name</label>
-                <input
-                  id="manualName"
-                  type="text"
-                  value={manualName}
-                  onChange={(e) => setManualName(e.target.value)}
-                  className="shopping-input"
-                  required
-                />
+          {isAuthenticated ? (
+            <form onSubmit={handleAddManual} className="shopping-form">
+              <div className="shopping-form-row">
+                <div className="shopping-form-group shopping-flex-1">
+                  <label htmlFor="manualName">Name</label>
+                  <input
+                    id="manualName"
+                    type="text"
+                    value={manualName}
+                    onChange={(e) => setManualName(e.target.value)}
+                    className="shopping-input"
+                    required
+                  />
+                </div>
+                <div className="shopping-form-group shopping-w-sm">
+                  <label htmlFor="manualQty">Quantity</label>
+                  <input
+                    id="manualQty"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={manualQty}
+                    onChange={(e) =>
+                      setManualQty(e.target.value ? Number(e.target.value) : "")
+                    }
+                    className="shopping-input"
+                    required
+                  />
+                </div>
               </div>
-              <div className="shopping-form-group shopping-w-sm">
-                <label htmlFor="manualQty">Quantity</label>
-                <input
-                  id="manualQty"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={manualQty}
-                  onChange={(e) =>
-                    setManualQty(e.target.value ? Number(e.target.value) : "")
-                  }
-                  className="shopping-input"
-                  required
-                />
-              </div>
+              {manualError && (
+                <p className="shopping-error-text">{manualError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={isAnyActionRunning}
+                className="shopping-btn-dark"
+              >
+                {isSubmittingManual ? "Adding..." : "Add to list"}
+              </button>
+            </form>
+          ) : (
+            <div className="shopping-empty">
+              Sign in to add your own entries.
             </div>
-            {manualError && (
-              <p className="shopping-error-text">{manualError}</p>
-            )}
-            <button
-              type="submit"
-              disabled={isAnyActionRunning}
-              className="shopping-btn-dark"
-            >
-              {isSubmittingManual ? "Adding..." : "Add to list"}
-            </button>
-          </form>
+          )}
         </section>
 
         {purchasingItem && (
@@ -506,6 +599,36 @@ export default function ShoppingListPage() {
         </table>
         </div>
       </section>
+
+      {!isAuthenticated && (
+        <div
+          style={{
+            marginTop: "1rem",
+            padding: "1rem",
+            backgroundColor: "#f1ecde",
+            borderRadius: "0.5rem",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ margin: "0 0 0.5rem 0", color: "#223129" }}>
+            Browse as a guest.{" "}
+            <button
+              onClick={requireSignIn}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#2f7056",
+                cursor: "pointer",
+                fontWeight: 600,
+                textDecoration: "underline",
+              }}
+            >
+              Sign in
+            </button>
+            to generate, add, or purchase entries.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

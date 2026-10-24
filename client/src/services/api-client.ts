@@ -1,5 +1,6 @@
 import { ApiClient, ApiError } from "../types";
 import { httpApi } from "./http-api";
+import { authApi } from "./auth-api";
 import {
   mockApi,
   resetMockState,
@@ -10,6 +11,8 @@ import {
 const useMocks = import.meta.env.VITE_USE_MOCKS === "true";
 
 export const api: ApiClient = useMocks ? mockApi : httpApi;
+
+export { authApi };
 
 export type { ApiClient };
 export {

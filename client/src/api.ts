@@ -1,9 +1,15 @@
 import { ApiError } from "./types";
+import { getAccessToken } from "./services/session-storage";
 
 const rawApiUrl = import.meta.env.VITE_API_URL || "/api";
 export const API_URL = rawApiUrl.endsWith("/")
   ? rawApiUrl.slice(0, -1)
   : rawApiUrl;
+
+export function getAuthHeaders(): HeadersInit {
+  const token = getAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export async function request<T>(
   path: string,
@@ -64,4 +70,13 @@ export async function request<T>(
 
 export { ApiError } from "./types";
 export type { ApiClient, ApiErrorBody } from "./types";
+export type {
+  SafeUser,
+  HouseholdRole,
+  RegisterInput,
+  LoginInput,
+  LoginResult,
+  AuthClient,
+} from "./types";
+export { authApi } from "./services/auth-api";
 export { api, isMockMode } from "./services/api-client";
