@@ -46,7 +46,7 @@
 }
 
 /* Temporary status labels (Rami's StatusBadge replaces them later). */
-.item-status-label {
+/* .item-status-label {
   display: inline-block;
   padding: 3px 10px;
   border: 1px solid var(--item-border);
@@ -55,7 +55,7 @@
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-}
+} */
 
 /* ---------- Form page ---------- */
 
@@ -107,11 +107,11 @@
   font: inherit;
 }
 
-.item-form input[type='date'] {
+.item-form input[type="date"] {
   max-width: 260px;
 }
 
-.item-form [aria-invalid='true'] {
+.item-form [aria-invalid="true"] {
   border-color: var(--item-danger-line);
   box-shadow: 0 0 0 1px var(--item-danger-line);
 }
@@ -169,7 +169,7 @@
   cursor: pointer;
 }
 
-.item-form-actions button[type='submit'] {
+.item-form-actions button[type="submit"] {
   border-color: var(--item-primary);
   background: var(--item-primary);
   color: #fff;
@@ -446,7 +446,7 @@
   color: #1f5a42;
 }
 
-.item-table-wrap {
+/* .item-table-wrap {
   overflow-x: auto;
 }
 
@@ -469,7 +469,7 @@
   padding: 16px;
   border-top: 1px solid var(--item-border);
   white-space: nowrap;
-}
+} */
 
 /* ---------- Mobile ---------- */
 

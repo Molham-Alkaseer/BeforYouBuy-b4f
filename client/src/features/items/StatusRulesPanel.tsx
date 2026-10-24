@@ -1,8 +1,11 @@
-const RULES = [
-  { label: 'LOW STOCK', text: 'Quantity is below the minimum.' },
-  { label: 'USE SOON', text: 'Expires today or in the next 3 days.' },
-  { label: 'EXPIRED', text: 'The expiry date is before today.' },
-  { label: 'OK', text: 'None of the above applies.' },
+import StatusBadge from '../../components/StatusBadge';
+import type { PantryStatus } from './itemTypes';
+
+const RULES: { status: PantryStatus; text: string }[] = [
+  { status: 'LOW STOCK', text: 'Quantity is below the minimum.' },
+  { status: 'USE SOON', text: 'Expires today or in the next 3 days.' },
+  { status: 'EXPIRED', text: 'The expiry date is before today.' },
+  { status: 'OK', text: 'None of the above applies.' },
 ];
 
 // Only explains the rules. Statuses are never calculated or sent from here.
@@ -13,9 +16,8 @@ export default function StatusRulesPanel() {
 
       <ul>
         {RULES.map((rule) => (
-          <li key={rule.label}>
-            {/* TEMPORARY plain label: replace with Rami's StatusBadge when it exists. */}
-            <strong className="item-status-label">{rule.label}</strong>
+          <li key={rule.status}>
+            <StatusBadge status={rule.status} />
             <span>{rule.text}</span>
           </li>
         ))}
