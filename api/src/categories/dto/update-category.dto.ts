@@ -1,2 +1,4 @@
-// TODO: Add class-validator rules and Swagger properties before using this DTO.
-export class UpdateCategoryDto {}
+import { CreateCategoryDto } from './create-category.dto';
+
+// Name is the only editable field, so an empty PATCH is invalid.
+export class UpdateCategoryDto extends CreateCategoryDto {}

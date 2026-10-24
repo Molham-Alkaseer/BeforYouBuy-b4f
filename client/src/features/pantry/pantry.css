@@ -1,0 +1,9 @@
+.pantry-filters { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr)) auto; gap: 16px; align-items: end; margin-bottom: 24px; padding: 20px; }
+.pantry-filters label { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; font-weight: 650; min-width: 0; }
+.pantry-filters input, .pantry-filters select { width: 100%; min-height: 46px; border: 1px solid #dcd3c4; border-radius: 8px; padding: 10px 12px; color: var(--byb-text); background: white; font-weight: 400; }
+.pantry-filters button { min-height: 46px; font-size: .85rem; }
+.pantry-table { min-width: 740px; }
+.pantry-table tbody th { width: 26%; }
+.pantry-table td:last-child { width: 24%; }
+@media (max-width: 1200px) { .pantry-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .pantry-filters { grid-template-columns: 1fr; } }
