@@ -1,0 +1,38 @@
+@base = http://localhost:3000/api
+@internalKey = replace-with-your-local-api-env-key
+# Set this to the ID returned by POST; failed creates may leave ID gaps.
+@categoryId = 8
+
+### Public list: 200, no key required
+GET {{base}}/categories
+
+### Create: 201
+POST {{base}}/categories
+Content-Type: application/json
+x-internal-tool-key: {{internalKey}}
+
+{ "name": " Baking " }
+
+### Rename: 200
+PATCH {{base}}/categories/{{categoryId}}
+Content-Type: application/json
+x-internal-tool-key: {{internalKey}}
+
+{ "name": "Baking supplies" }
+
+### Delete unused category: 204
+DELETE {{base}}/categories/{{categoryId}}
+x-internal-tool-key: {{internalKey}}
+
+### Seeded Dairy is in use: 409 CATEGORY_IN_USE
+DELETE {{base}}/categories/1
+x-internal-tool-key: {{internalKey}}
+
+### Unknown query: 400 with fieldErrors
+GET {{base}}/categories?unexpected=true
+
+### Missing key: 403 INTERNAL_TOOL_FORBIDDEN
+POST {{base}}/categories
+Content-Type: application/json
+
+{ "name": "Test" }

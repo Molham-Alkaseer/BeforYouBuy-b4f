@@ -1,148 +1,70 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import EmptyState from '../components/EmptyState';
-import ErrorMessage from '../components/ErrorMessage';
-import LoadingMessage from '../components/LoadingMessage';
-import PantryFilters from '../features/pantry/PantryFilters';
-import type { PantryFilterValues } from '../features/pantry/PantryFilters';
-import PantryTable from '../features/pantry/PantryTable';
 import { api } from '../services/api-client';
-import type { Category, PantryList, PantryQuery } from '../types';
+import type { Category, PantryList, PantryQuery, PantryStatus } from '../types';
+import StatusBadge from '../components/StatusBadge';
+import LoadingMessage from '../components/LoadingMessage';
+import ErrorMessage from '../components/ErrorMessage';
+import EmptyState from '../components/EmptyState';
+import { errorMessage, expiryDescription, formatDate } from '../features/pantry/display';
 import '../features/pantry/pantry.css';
 
-function errorMessage(cause: unknown, fallback: string): string {
-  return cause instanceof Error && cause.message.trim() !== '' ? cause.message : fallback;
-}
-
-function formatAsOfDate(value: string): string {
-  return new Date(`${value}T12:00:00`).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
-}
-
 export default function PantryPage() {
-  const [filters, setFilters] = useState<PantryFilterValues>({ name: '', categoryId: '', status: '' });
+  const [name, setName] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [status, setStatus] = useState<PantryStatus | ''>('');
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryError, setCategoryError] = useState('');
   const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [categoryVersion, setCategoryVersion] = useState(0);
-  const [pantry, setPantry] = useState<PantryList | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [requestVersion, setRequestVersion] = useState(0);
-  const latestRequest = useRef(0);
+  const [data, setData] = useState<PantryList | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const [categoryRetry, setCategoryRetry] = useState(0);
+  const filtered = Boolean(name.trim() || categoryId || status);
 
   useEffect(() => {
-    let isCurrent = true;
-    async function loadCategories() {
-      setCategoriesLoading(true);
-      setCategoryError(null);
-      try {
-        const result = await api.listCategories();
-        if (isCurrent) setCategories(result.items);
-      } catch (cause) {
-        if (isCurrent) setCategoryError(errorMessage(cause, 'Please try loading categories again.'));
-      } finally {
-        if (isCurrent) setCategoriesLoading(false);
-      }
-    }
-    loadCategories();
-    return () => { isCurrent = false; };
-  }, [categoryVersion]);
+    let cancelled = false;
+    setCategoriesLoading(true);
+    setCategoryError('');
+    api.listCategories().then(result => { if (!cancelled) setCategories(result.items); })
+      .catch(failure => { if (!cancelled) setCategoryError(errorMessage(failure)); })
+      .finally(() => { if (!cancelled) setCategoriesLoading(false); });
+    return () => { cancelled = true; };
+  }, [categoryRetry]);
 
   useEffect(() => {
-    const requestId = ++latestRequest.current;
-    let isCurrent = true;
+    // Ignore results from superseded requests, including failures.
+    let cancelled = false;
     const query: PantryQuery = {};
-    const name = filters.name.trim();
-    if (name !== '') query.name = name;
-    if (filters.categoryId !== '') query.categoryId = filters.categoryId;
-    if (filters.status !== '') query.status = filters.status;
+    if (name.trim()) query.name = name.trim();
+    if (categoryId) query.categoryId = Number(categoryId);
+    if (status) query.status = status;
+    setLoading(true);
+    setError('');
+    api.listPantry(query).then(result => { if (!cancelled) setData(result); })
+      .catch(failure => { if (!cancelled) setError(errorMessage(failure)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [name, categoryId, status, retry]);
 
-    async function loadPantry() {
-      setIsLoading(true);
-      setError(null);
-      setPantry(null);
-      try {
-        const result = await api.listPantry(query);
-        if (isCurrent && requestId === latestRequest.current) setPantry(result);
-      } catch (cause) {
-        if (isCurrent && requestId === latestRequest.current) {
-          setError(errorMessage(cause, 'We could not load your pantry. Please try again.'));
-        }
-      } finally {
-        if (isCurrent && requestId === latestRequest.current) setIsLoading(false);
-      }
-    }
-    loadPantry();
-    return () => { isCurrent = false; };
-  }, [filters, requestVersion]);
+  function clearFilters() { setName(''); setCategoryId(''); setStatus(''); }
 
-  function changeFilters(next: PantryFilterValues) {
-    // Invalidate immediately in the event handler, before the next effect starts.
-    latestRequest.current += 1;
-    setIsLoading(true);
-    setError(null);
-    setPantry(null);
-    setFilters(next);
-  }
-
-  function retryPantry() {
-    latestRequest.current += 1;
-    setIsLoading(true);
-    setError(null);
-    setPantry(null);
-    setRequestVersion((version) => version + 1);
-  }
-
-  const hasActiveFilters = filters.name.trim() !== '' || filters.categoryId !== '' || filters.status !== '';
-
-  return (
-    <section className="pantry-page" aria-labelledby="pantry-title">
-      <div className="pantry-header">
-        <div>
-          <h1 id="pantry-title">Pantry</h1>
-          {!isLoading && pantry !== null && (
-            <p className="pantry-summary">
-              {pantry.total} {pantry.total === 1 ? 'item' : 'items'}{hasActiveFilters ? ' matching your filters' : ' in your pantry'}
-              {' · '}statuses as of <time dateTime={pantry.asOfDate}>{formatAsOfDate(pantry.asOfDate)}</time>
-            </p>
-          )}
-        </div>
-        <Link className="byb-button byb-button-primary" to="/pantry/new">Add item</Link>
-      </div>
-
-      <PantryFilters
-        values={filters}
-        categories={categories}
-        categoriesLoading={categoriesLoading}
-        categoriesUnavailable={categoryError !== null}
-        onChange={changeFilters}
-        onClear={() => changeFilters({ name: '', categoryId: '', status: '' })}
-      />
-      {categoryError !== null && (
-        <div className="pantry-category-status" id="pantry-category-error">
-          <ErrorMessage message={`Categories could not be loaded. ${categoryError}`} />
-          <button className="byb-button byb-button-secondary" type="button" onClick={() => setCategoryVersion((version) => version + 1)}>
-            Retry categories
-          </button>
-        </div>
-      )}
-
-      <div className="pantry-results" aria-busy={isLoading}>
-        {isLoading && <LoadingMessage message="Loading your pantry..." />}
-        {!isLoading && error !== null && (
-          <div className="pantry-load-error">
-            <ErrorMessage message={error} />
-            <button className="byb-button byb-button-primary" type="button" onClick={retryPantry}>Try again</button>
-          </div>
-        )}
-        {!isLoading && error === null && pantry !== null && (
-          pantry.items.length === 0 ? (
-            <EmptyState message={hasActiveFilters ? 'No items match your filters. Try changing or clearing them.' : 'Your pantry is empty. Add an item to get started.'} />
-          ) : <PantryTable items={pantry.items} />
-        )}
-      </div>
-    </section>
-  );
+  return <section className="pantry-page">
+    <header className="byb-page-header"><div><h1>Pantry</h1>{data && !loading && !error && <p>{data.total} {filtered ? 'matching items' : 'items'} · statuses as of <time dateTime={data.asOfDate}>{formatDate(data.asOfDate)}</time></p>}</div><Link className="byb-button" to="/pantry/new">Add item</Link></header>
+    <form className="byb-panel pantry-filters" role="search" onSubmit={event => event.preventDefault()}>
+      <label htmlFor="pantry-name">Search by name<input id="pantry-name" type="search" placeholder="Try “mil”" value={name} onChange={event => setName(event.target.value)} /></label>
+      <label htmlFor="pantry-category">Category<select id="pantry-category" disabled={categoriesLoading} value={categoryId} onChange={event => setCategoryId(event.target.value)}><option value="">{categoriesLoading ? 'Loading categories…' : 'All categories'}</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+      <label htmlFor="pantry-status">Status<select id="pantry-status" value={status} onChange={event => setStatus(event.target.value as PantryStatus | '')}><option value="">All statuses</option>{(['LOW STOCK', 'USE SOON', 'EXPIRED', 'OK'] as const).map(value => <option key={value}>{value}</option>)}</select></label>
+      <button className="byb-button byb-button-secondary" type="button" onClick={clearFilters}>Clear filters</button>
+    </form>
+    {categoryError && <div><ErrorMessage message={`Unable to load categories: ${categoryError}`} /><button className="byb-button byb-button-secondary" onClick={() => setCategoryRetry(value => value + 1)}>Retry categories</button></div>}
+    {loading ? <LoadingMessage message="Loading pantry…" /> : error ? <div><ErrorMessage message={error} /><button className="byb-button byb-button-secondary" onClick={() => setRetry(value => value + 1)}>Retry pantry</button></div> : data && (data.items.length === 0 ? <div className="byb-panel"><EmptyState message={filtered ? 'No matching items. Try another search or clear your filters.' : 'Your pantry is empty. Add your first item to get started.'} />{filtered ? <button className="byb-button byb-button-secondary" onClick={clearFilters}>Show all items</button> : <Link className="byb-button" to="/pantry/new">Add your first item</Link>}</div> :
+      <div className="byb-table-scroll" role="region" aria-label="Pantry items" tabIndex={0}><table className="byb-table pantry-table"><caption className="byb-sr-only">Pantry items and their current stock and expiry statuses</caption><thead><tr><th scope="col">Item</th><th scope="col">Quantity</th><th scope="col">Minimum</th><th scope="col">Expiry</th><th scope="col">Status</th></tr></thead><tbody>{data.items.map(item => <tr key={item.id}>
+        <th scope="row"><Link to={`/pantry/${item.id}`}>{item.name}</Link><small>{item.categoryName}</small></th>
+        <td>{item.quantity} {item.unit}</td><td className="byb-muted">{item.minimumQuantity} {item.unit}</td>
+        <td>{item.expiryDate ? <><time dateTime={item.expiryDate}>{formatDate(item.expiryDate)}</time><small>{expiryDescription(item.daysUntilExpiry)}</small></> : 'No expiry date'}</td>
+        <td><div className="byb-badges">{item.statuses.map(value => <StatusBadge key={value} status={value} />)}</div></td>
+      </tr>)}</tbody></table></div>)}
+  </section>;
 }

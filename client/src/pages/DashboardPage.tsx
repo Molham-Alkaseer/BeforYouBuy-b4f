@@ -1,157 +1,86 @@
-import { useEffect, useRef, useState } from 'react';
-import ErrorMessage from '../components/ErrorMessage';
-import LoadingMessage from '../components/LoadingMessage';
-import DashboardOverview from '../features/dashboard/DashboardOverview';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../services/api-client';
-import type { Dashboard, GenerateResult } from '../types';
+import type { Dashboard, PantryStatus } from '../types';
+import StatusBadge from '../components/StatusBadge';
+import LoadingMessage from '../components/LoadingMessage';
+import ErrorMessage from '../components/ErrorMessage';
+import EmptyState from '../components/EmptyState';
+import { errorMessage, expiryDescription, formatDate } from '../features/pantry/display';
 import '../features/dashboard/dashboard.css';
 
-function errorMessage(cause: unknown, fallback: string): string {
-  return cause instanceof Error && cause.message.trim() !== '' ? cause.message : fallback;
-}
+const statuses: { status: PantryStatus; description: string }[] = [
+  { status: 'LOW STOCK', description: 'Below the minimum you keep' },
+  { status: 'USE SOON', description: 'Expire today or within 3 days' },
+  { status: 'EXPIRED', description: 'Past their expiry date' },
+  { status: 'OK', description: 'Nothing to worry about' },
+];
 
 export default function DashboardPage() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [requestVersion, setRequestVersion] = useState(0);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [generationResult, setGenerationResult] = useState<GenerateResult | null>(null);
-  const [generationError, setGenerationError] = useState<string | null>(null);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
-  const isMounted = useRef(false);
-  const operationLocked = useRef(false);
-
-  useEffect(() => {
-    isMounted.current = true;
-    return () => { isMounted.current = false; };
-  }, []);
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    async function loadDashboard() {
-      setIsLoading(true);
-      setError(null);
-      setDashboard(null);
-
-      try {
-        const result = await api.getDashboard();
-        if (isCurrent) setDashboard(result);
-      } catch (cause) {
-        if (isCurrent) setError(errorMessage(cause, 'We could not load your dashboard. Please try again.'));
-      } finally {
-        if (isCurrent) setIsLoading(false);
-      }
-    }
-
-    loadDashboard();
-    return () => { isCurrent = false; };
-  }, [requestVersion]);
-
-  async function refreshDashboard() {
-    setIsRefreshing(true);
-    setRefreshError(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const requestId = useRef(0);
+  const generationPending = useRef(false);
+  const reload = useCallback(async () => {
+    const id = ++requestId.current;
+    setLoading(true);
+    setError('');
     try {
-      const refreshed = await api.getDashboard();
-      if (isMounted.current) setDashboard(refreshed);
-    } catch (cause) {
-      if (isMounted.current) {
-        setRefreshError(errorMessage(cause, 'Please try refreshing the dashboard again.'));
-      }
+      const result = await api.getDashboard();
+      if (id === requestId.current) setDashboard(result);
+    } catch (failure) {
+      if (id === requestId.current) setError(errorMessage(failure));
     } finally {
-      if (isMounted.current) setIsRefreshing(false);
+      if (id === requestId.current) setLoading(false);
     }
-  }
+  }, []);
+  const invalidateRequest = useCallback(() => { requestId.current++; }, []);
+  useEffect(() => { void reload(); return invalidateRequest; }, [reload, invalidateRequest]);
 
-  async function handleGenerate() {
-    // A ref blocks a second click immediately, before React renders disabled=true.
-    if (operationLocked.current || isLoading || dashboard === null || refreshError !== null) return;
-    operationLocked.current = true;
-    setIsGenerating(true);
-    setGenerationResult(null);
-    setGenerationError(null);
-
+  async function generate() {
+    if (generationPending.current) return;
+    generationPending.current = true;
+    setGenerating(true);
+    setGenerationError('');
+    setFeedback('');
     try {
       const result = await api.generateShoppingList();
-      if (!isMounted.current) return;
-      setGenerationResult(result);
-      await refreshDashboard();
-    } catch (cause) {
-      if (isMounted.current) {
-        setGenerationError(errorMessage(cause, 'We could not generate your shopping list. Please try again.'));
-      }
+      setFeedback(`Shopping list generated: ${result.added} added, ${result.updated} updated, ${result.unchanged} unchanged.`);
+      await reload();
+    } catch (failure) {
+      setGenerationError(errorMessage(failure));
     } finally {
-      operationLocked.current = false;
-      if (isMounted.current) setIsGenerating(false);
+      generationPending.current = false;
+      setGenerating(false);
     }
   }
 
-  async function handleRefresh() {
-    if (operationLocked.current || refreshError === null) return;
-    operationLocked.current = true;
-    try {
-      // This retry only reads Dashboard; it never repeats the successful mutation.
-      await refreshDashboard();
-    } finally {
-      operationLocked.current = false;
-    }
-  }
-
-  const isBusy = isLoading || isGenerating || isRefreshing;
-
-  return (
-    <section className="dashboard-page" aria-labelledby="dashboard-title" aria-busy={isBusy}>
-      <div className="dashboard-header">
-        <h1 id="dashboard-title">Dashboard</h1>
-        <button
-          className="byb-button byb-button-primary dashboard-generate-button"
-          type="button"
-          disabled={isBusy || dashboard === null || refreshError !== null}
-          onClick={handleGenerate}
-        >
-          {isRefreshing ? 'Updating dashboard…' : isGenerating ? 'Generating…' : 'Generate shopping list'}
-        </button>
+  return <section className="dashboard-page">
+    <header className="byb-page-header"><div><h1>Dashboard</h1>{dashboard && <p><time dateTime={dashboard.asOfDate}>{formatDate(dashboard.asOfDate)}</time> · {dashboard.totalItems} items in your pantry</p>}</div>
+      <button className="byb-button" disabled={generating} onClick={() => void generate()}>{generating ? 'Generating…' : 'Generate shopping list'}</button>
+    </header>
+    {feedback && <p className="byb-message" role="status">{feedback} <Link to="/shopping-list">Open shopping list</Link></p>}
+    {generationError && <ErrorMessage message={generationError} />}
+    {loading && <LoadingMessage message="Loading dashboard…" />}
+    {error && <div><ErrorMessage message={error} /><button className="byb-button byb-button-secondary" onClick={() => void reload()}>Retry dashboard</button></div>}
+    {dashboard && !loading && !error && <>
+      <div className="dashboard-stats">{statuses.map(({ status, description }) => <article className="byb-panel" key={status}><StatusBadge status={status} /><strong className="dashboard-count">{dashboard.statusCounts[status]}</strong><p>{description}</p></article>)}</div>
+      <p className="dashboard-count-note">An item can have more than one status.</p>
+      <div className="dashboard-columns">
+        <section className="byb-panel"><h2>Use these first</h2><p className="byb-muted">Expired and expiring items, soonest first</p>
+          {dashboard.urgentItems.length === 0 ? <EmptyState message="Nothing urgent. Your pantry is looking good." /> : <ul className="dashboard-urgent">{dashboard.urgentItems.map(item => <li key={item.id}>
+            <div><Link to={`/pantry/${item.id}`}>{item.name}</Link><small>{item.categoryName}</small></div>
+            <span>{expiryDescription(item.daysUntilExpiry)}</span><div className="byb-badges">{item.statuses.map(status => <StatusBadge key={status} status={status} />)}</div>
+          </li>)}</ul>}
+        </section>
+        <div className="dashboard-side"><section className="byb-panel dashboard-pending"><h2>Pending shopping entries</h2><strong className="dashboard-count">{dashboard.pendingShopping.total}</strong><p>{dashboard.pendingShopping.linked} from your pantry · {dashboard.pendingShopping.manual} added by hand</p><Link className="byb-button byb-button-secondary" to="/shopping-list">Open shopping list</Link></section>
+          <section className="byb-panel"><h2>Items per category</h2><ul className="dashboard-categories">{dashboard.categoryCounts.map(category => <li key={category.categoryId}><div><span>{category.categoryName}</span><strong>{category.count}</strong></div><meter min={0} max={Math.max(1, ...dashboard.categoryCounts.map(entry => entry.count))} value={category.count} aria-label={`${category.categoryName}: ${category.count} items`} /></li>)}</ul></section>
+        </div>
       </div>
-
-      {generationResult !== null && (
-        <div className="dashboard-generation-feedback" role="status">
-          <span className="dashboard-generation-check" aria-hidden="true">✓</span>
-          <p>
-            <strong>Shopping list updated.</strong>{' '}
-            {generationResult.added} added · {generationResult.updated} updated · {generationResult.unchanged} unchanged
-          </p>
-        </div>
-      )}
-      {generationError !== null && (
-        <div className="dashboard-generation-error"><ErrorMessage message={generationError} /></div>
-      )}
-      {isRefreshing && (
-        <div className="dashboard-refresh-status"><LoadingMessage message="Updating dashboard counts..." /></div>
-      )}
-      {refreshError !== null && (
-        <div className="dashboard-refresh-error">
-          <ErrorMessage message={`Your shopping list was updated, but the dashboard could not be refreshed. ${refreshError}`} />
-          <p className="dashboard-stale-note">The figures below are from before the update.</p>
-          <button className="byb-button byb-button-secondary" type="button" onClick={handleRefresh}>
-            Refresh dashboard
-          </button>
-        </div>
-      )}
-
-      {isLoading && (
-        <div className="dashboard-loading"><LoadingMessage message="Loading your dashboard..." /></div>
-      )}
-      {!isLoading && error !== null && (
-        <div className="dashboard-error">
-          <ErrorMessage message={error} />
-          <button className="byb-button byb-button-primary" type="button" onClick={() => setRequestVersion((version) => version + 1)}>
-            Try again
-          </button>
-        </div>
-      )}
-      {!isLoading && error === null && dashboard !== null && <DashboardOverview dashboard={dashboard} />}
-    </section>
-  );
+    </>}
+  </section>;
 }

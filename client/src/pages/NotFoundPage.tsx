@@ -1,15 +1,5 @@
 import { Link } from 'react-router-dom';
 
 export default function NotFoundPage() {
-  return (
-    <section className="byb-not-found" aria-labelledby="not-found-title">
-      <p className="byb-eyebrow">404 / PAGE NOT FOUND</p>
-      <h1 id="not-found-title">Page not found</h1>
-      <p>The page may have moved, or the address may be incorrect.</p>
-      <div className="byb-actions">
-        <Link className="byb-button byb-button-primary" to="/">Go to dashboard</Link>
-        <Link className="byb-button byb-button-secondary" to="/pantry">Open pantry</Link>
-      </div>
-    </section>
-  );
+  return <section className="byb-panel"><p>404</p><h1>Page not found</h1><p>This page does not exist. Return to your dashboard or browse your pantry.</p><Link className="byb-button" to="/">Back to dashboard</Link></section>;
 }

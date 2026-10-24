@@ -1,0 +1,140 @@
+{
+  "measuredAt": "2026-10-17T09:42:29.467Z",
+  "database": "Disposable fixture database, 20 pantry items",
+  "scope": "Actual pantryStoredQuery helper used by PantryService.findAll; category + USE SOON filter.",
+  "input": {
+    "categoryId": 1,
+    "status": "USE SOON"
+  },
+  "query": {
+    "categoryId": 1,
+    "expiryDate": {
+      "$gte": "2026-10-17",
+      "$lte": "2026-10-20"
+    }
+  },
+  "sort": {
+    "expiryDate": 1,
+    "id": 1
+  },
+  "before": {
+    "returned": 1,
+    "keysExamined": 0,
+    "documentsExamined": 20,
+    "executionTimeMs": 0,
+    "winningPlan": {
+      "isCached": false,
+      "stage": "SORT",
+      "sortPattern": {
+        "expiryDate": 1,
+        "id": 1
+      },
+      "memLimit": 104857600,
+      "type": "simple",
+      "inputStage": {
+        "stage": "COLLSCAN",
+        "filter": {
+          "$and": [
+            {
+              "categoryId": {
+                "$eq": 1
+              }
+            },
+            {
+              "expiryDate": {
+                "$lte": "2026-10-20"
+              }
+            },
+            {
+              "expiryDate": {
+                "$gte": "2026-10-17"
+              }
+            }
+          ]
+        },
+        "direction": "forward"
+      }
+    }
+  },
+  "candidate": {
+    "returned": 1,
+    "keysExamined": 1,
+    "documentsExamined": 1,
+    "executionTimeMs": 18,
+    "winningPlan": {
+      "isCached": false,
+      "stage": "FETCH",
+      "inputStage": {
+        "stage": "IXSCAN",
+        "keyPattern": {
+          "categoryId": 1,
+          "expiryDate": 1,
+          "id": 1
+        },
+        "indexName": "category_expiry_candidate",
+        "isMultiKey": false,
+        "multiKeyPaths": {
+          "categoryId": [],
+          "expiryDate": [],
+          "id": []
+        },
+        "isUnique": false,
+        "isSparse": false,
+        "isPartial": false,
+        "indexVersion": 2,
+        "direction": "forward",
+        "indexBounds": {
+          "categoryId": [
+            "[1, 1]"
+          ],
+          "expiryDate": [
+            "[\"2026-10-17\", \"2026-10-20\"]"
+          ],
+          "id": [
+            "[MinKey, MaxKey]"
+          ]
+        }
+      }
+    }
+  },
+  "decision": "Keep only correctness indexes for the 20-item household workload. The candidate reduces examined documents, but this dataset does not establish a useful latency benefit. Re-evaluate if the data grows.",
+  "afterDecision": {
+    "returned": 1,
+    "keysExamined": 0,
+    "documentsExamined": 20,
+    "executionTimeMs": 0,
+    "winningPlan": {
+      "isCached": false,
+      "stage": "SORT",
+      "sortPattern": {
+        "expiryDate": 1,
+        "id": 1
+      },
+      "memLimit": 104857600,
+      "type": "simple",
+      "inputStage": {
+        "stage": "COLLSCAN",
+        "filter": {
+          "$and": [
+            {
+              "categoryId": {
+                "$eq": 1
+              }
+            },
+            {
+              "expiryDate": {
+                "$lte": "2026-10-20"
+              }
+            },
+            {
+              "expiryDate": {
+                "$gte": "2026-10-17"
+              }
+            }
+          ]
+        },
+        "direction": "forward"
+      }
+    }
+  }
+}
