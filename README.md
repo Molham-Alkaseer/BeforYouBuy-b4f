@@ -37,7 +37,7 @@ INTERNAL_TOOL_KEY=replace-with-a-local-secret
 SEED_ON_START=true
 ```
 
-Inside `api/`, run `npm run start:dev`. In a second terminal, enter `client/`, run `npm install`, then `npm run dev`.
+Inside `api/`, run `npm run start:dev`. This first starts the local Windows MongoDB replica set (or reuses it if already running) and waits for it to be ready before starting Nest. In a second terminal, enter `client/`, run `npm install`, then `npm run dev`.
 
 Frontend: http://localhost:5173. API: http://localhost:3000/api. Swagger: http://localhost:3000/docs.
 
