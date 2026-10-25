@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import EmptyState from '../../components/EmptyState';
 import LoadingMessage from '../../components/LoadingMessage';
+import PurchaseHistoryTable from '../../components/PurchaseHistoryTable';
 import { readApiError } from './apiError';
 import { itemApi } from './itemApi';
-import { formatDate, formatQuantity, formatTimestampDate } from './itemFormat';
 import type { ShoppingEntry } from './itemTypes';
 import RetryError from './RetryError';
 
@@ -18,7 +18,6 @@ interface ItemHistoryProps {
   itemName: string;
 }
 
-// TEMPORARY local table: replace with Rami's PurchaseHistoryTable when it exists.
 export default function ItemHistory({ itemId, itemName }: ItemHistoryProps) {
   const [state, setState] = useState<HistoryState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0); // goes up by 1 on every "Try again"
@@ -71,38 +70,7 @@ export default function ItemHistory({ itemId, itemName }: ItemHistoryProps) {
       )}
 
       {state.kind === 'ready' && state.entries.length > 0 && (
-        <div className="item-table-wrap">
-          <table className="item-history-table">
-            <thead>
-              <tr>
-                <th scope="col">Purchased on</th>
-                <th scope="col">Bought</th>
-                <th scope="col">New expiry date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.entries.map((entry) => (
-                <tr key={entry.id}>
-                  <td>
-                    {entry.purchasedAt
-                      ? formatTimestampDate(entry.purchasedAt)
-                      : '—'}
-                  </td>
-                  <td>
-                    {entry.purchasedQuantity === null
-                      ? '—'
-                      : formatQuantity(entry.purchasedQuantity, entry.unit ?? '')}
-                  </td>
-                  <td>
-                    {entry.newExpiryDate
-                      ? formatDate(entry.newExpiryDate)
-                      : 'No expiry date'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <PurchaseHistoryTable entries={state.entries} />
       )}
     </section>
   );
