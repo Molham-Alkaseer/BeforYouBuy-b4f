@@ -1,7 +1,18 @@
 param(
-  [string]$MongoExe = 'C:\Program Files\MongoDB\Server\8.0\bin\mongod.exe'
+  [string]$MongoExe
 )
 $ErrorActionPreference = 'Stop'
+if (!$MongoExe) {
+  $mongoCommand = Get-Command mongod -ErrorAction SilentlyContinue
+  if ($mongoCommand) { $MongoExe = $mongoCommand.Source }
+  else {
+    $mongoVersion = Get-ChildItem 'C:\Program Files\MongoDB\Server' -Directory -ErrorAction SilentlyContinue |
+      Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'bin\mongod.exe') } |
+      Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+    if ($mongoVersion) { $MongoExe = Join-Path $mongoVersion.FullName 'bin\mongod.exe' }
+  }
+}
+if (!$MongoExe) { throw 'Install MongoDB or set -MongoExe to your mongod.exe path.' }
 if (!(Test-Path -LiteralPath $MongoExe)) { throw 'Set -MongoExe to your mongod.exe path.' }
 $apiRoot = Split-Path $PSScriptRoot -Parent
 $dataPath = Join-Path $apiRoot '.local\mongo-rs'

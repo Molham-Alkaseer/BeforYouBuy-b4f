@@ -120,11 +120,13 @@ export class ShoppingListService {
   }
 
   async findAll(
-    query: FindShoppingListQueryDto = {},
+    query: FindShoppingListQueryDto,
+    householdId: number,
     session?: ClientSession,
     today = this.clock.today(),
   ) {
     const filter = {
+      householdId,
       ...(query.status === undefined ? {} : { status: query.status }),
       ...(query.pantryItemId === undefined
         ? {}
@@ -137,12 +139,12 @@ export class ShoppingListService {
       .lean()
       .exec();
     const pantry = await this.items
-      .find()
+      .find({ householdId })
       .session(session ?? null)
       .lean()
       .exec();
     const pending = await this.entries
-      .find({ status: EntryStatus.PENDING })
+      .find({ householdId, status: EntryStatus.PENDING })
       .session(session ?? null)
       .lean()
       .exec();
@@ -174,7 +176,11 @@ export class ShoppingListService {
     };
   }
 
-  async addManualEntry(dto: CreateManualEntryDto, actorId: ActorId) {
+  async addManualEntry(
+    dto: CreateManualEntryDto,
+    actorId: ActorId,
+    householdId: number,
+  ) {
     const id = await this.ids.next('shopping_entries');
     const today = this.clock.today();
     const ids: RejectionIds = {};
@@ -183,7 +189,11 @@ export class ShoppingListService {
         this.writes.run(async (session) => {
           const normalizedName = dto.name.trim().toLowerCase();
           const conflict = await this.entries
-            .findOne({ normalizedName, status: EntryStatus.PENDING })
+            .findOne({
+              householdId,
+              normalizedName,
+              status: EntryStatus.PENDING,
+            })
             .select({ id: 1, pantryItemId: 1 })
             .session(session)
             .lean()
@@ -197,6 +207,7 @@ export class ShoppingListService {
             [
               {
                 id,
+                householdId,
                 name: dto.name.trim(),
                 normalizedName,
                 quantityToBuy: dto.quantityToBuy,
@@ -219,20 +230,20 @@ export class ShoppingListService {
     return result;
   }
 
-  async generateShoppingList(actorId: ActorId) {
+  async generateShoppingList(actorId: ActorId, householdId: number) {
     const today = this.clock.today();
     const ids: RejectionIds = {};
     const result = await this.logRejection('generate', actorId, ids, () =>
       this.nameWrite(() =>
         this.writes.run(async (session) => {
           const pantry = await this.items
-            .find()
+            .find({ householdId })
             .sort({ id: 1 })
             .session(session)
             .lean()
             .exec();
           const pending = await this.entries
-            .find({ status: EntryStatus.PENDING })
+            .find({ householdId, status: EntryStatus.PENDING })
             .session(session)
             .exec();
           let added = 0,
@@ -287,6 +298,7 @@ export class ShoppingListService {
                 [
                   {
                     id,
+                    householdId,
                     name: item.name,
                     normalizedName,
                     quantityToBuy,
@@ -311,6 +323,7 @@ export class ShoppingListService {
             unchanged,
             pending: await this.findAll(
               { status: EntryStatus.PENDING },
+              householdId,
               session,
               today,
             ),
@@ -324,7 +337,12 @@ export class ShoppingListService {
     return result;
   }
 
-  async purchaseEntry(id: number, dto: PurchaseEntryDto, actorId: ActorId) {
+  async purchaseEntry(
+    id: number,
+    dto: PurchaseEntryDto,
+    actorId: ActorId,
+    householdId: number,
+  ) {
     const today = this.clock.today();
     const ids: RejectionIds = { entryId: id };
     const { response, restock } = await this.logRejection(
@@ -334,7 +352,7 @@ export class ShoppingListService {
       () =>
         this.writes.run(async (session) => {
           const entry = await this.entries
-            .findOne({ id })
+            .findOne({ id, householdId })
             .session(session)
             .exec();
           if (!entry)
@@ -360,7 +378,7 @@ export class ShoppingListService {
               );
           } else {
             const item = await this.items
-              .findOne({ id: entry.pantryItemId })
+              .findOne({ id: entry.pantryItemId, householdId })
               .session(session)
               .exec();
             if (!item)
@@ -437,12 +455,16 @@ export class ShoppingListService {
     return response;
   }
 
-  async deleteEntry(id: number, actorId: ActorId): Promise<void> {
+  async deleteEntry(
+    id: number,
+    actorId: ActorId,
+    householdId: number,
+  ): Promise<void> {
     const ids: RejectionIds = { entryId: id };
     const pantryItemId = await this.logRejection('delete', actorId, ids, () =>
       this.writes.run(async (session) => {
         const entry = await this.entries
-          .findOne({ id })
+          .findOne({ id, householdId })
           .session(session)
           .exec();
         if (!entry)
@@ -454,7 +476,7 @@ export class ShoppingListService {
             'ENTRY_ALREADY_PURCHASED',
             'Purchase history cannot be deleted.',
           );
-        await this.entries.deleteOne({ id }, { session }).exec();
+        await this.entries.deleteOne({ id, householdId }, { session }).exec();
         return entry.pantryItemId;
       }),
     );

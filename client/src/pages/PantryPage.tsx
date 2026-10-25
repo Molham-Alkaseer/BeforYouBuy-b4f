@@ -16,11 +16,7 @@ import "../features/pantry/pantry.css";
 
 export default function PantryPage() {
   const auth = useAuth();
-  const authStatus = auth.status;
-  const addItemTo =
-    authStatus !== "anonymous"
-      ? "/pantry/new"
-      : `/login?${new URLSearchParams({ returnTo: "/pantry/new" })}`;
+  const canManage = auth.user?.householdRole === "admin" || auth.user?.householdRole === "owner";
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [status, setStatus] = useState<PantryStatus | "">("");
@@ -98,9 +94,9 @@ export default function PantryPage() {
             </p>
           )}
         </div>
-        <Link className="byb-button" to={addItemTo}>
+        {canManage && <Link className="byb-button" to="/pantry/new">
           Add item
-        </Link>
+        </Link>}
       </header>
       <form
         className="byb-panel pantry-filters"

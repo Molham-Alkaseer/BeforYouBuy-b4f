@@ -55,6 +55,7 @@ const user: SafeUser = {
   email: 'member@example.com',
   createdAt: '2026-10-25T00:00:00.000Z',
   householdRole: 'member',
+  householdId: 1,
 };
 const input = { email: user.email, password: 'member123' };
 const ok = (data: unknown) =>
@@ -88,7 +89,7 @@ describe('Shared session and transport behavior', () => {
     fetchMock.mockRestore();
   });
 
-  it('uses accessToken, restores current user with bearer, and leaves public reads anonymous', async () => {
+  it('uses accessToken, restores current user with bearer, and authenticates reads', async () => {
     fetchMock.mockResolvedValueOnce(ok({ accessToken: 'real-token', user }));
     await expect(client.login(input)).resolves.toBeUndefined();
     expect(client.getSessionState()).toMatchObject({
@@ -105,7 +106,9 @@ describe('Shared session and transport behavior', () => {
     expect(client.getSessionState().user.householdRole).toBe('admin');
     fetchMock.mockResolvedValueOnce(ok({ items: [] }));
     await client.api.listCategories();
-    expect(fetchMock.mock.calls[2][1].headers.has('Authorization')).toBe(false);
+    expect(fetchMock.mock.calls[2][1].headers.get('Authorization')).toBe(
+      'Bearer real-token',
+    );
   });
 
   it('invalidates a protected 401 once and never retries the mutation', async () => {
@@ -241,6 +244,65 @@ describe('Shared session and transport behavior', () => {
 });
 
 describe('Explicit mock authentication follows the shared session', () => {
+  it('isolates newly registered households and gives added family members read-only access', async () => {
+    const client = loadSession(true);
+    const first = {
+      name: 'First admin',
+      email: 'first@example.com',
+      password: 'password123',
+    };
+    const second = {
+      ...first,
+      name: 'Second admin',
+      email: 'second@example.com',
+    };
+    const family = {
+      ...first,
+      name: 'Family member',
+      email: 'family@example.com',
+    };
+    const firstUser = await client.authApi.register(first);
+    const secondUser = await client.authApi.register(second);
+    expect(firstUser.householdRole).toBe('admin');
+    expect(firstUser.householdId).not.toBe(secondUser.householdId);
+    await client.login({ email: first.email, password: first.password });
+    expect((await client.api.listPantry()).items).toEqual([]);
+    const item = await client.api.createPantryItem({
+      name: 'Private item',
+      categoryId: 1,
+      quantity: 3,
+      minimumQuantity: 1,
+      unit: 'kg',
+    });
+    const added = await client.authApi.addMember(family);
+    expect(added).toMatchObject({
+      householdRole: 'member',
+      householdId: firstUser.householdId,
+    });
+    expect(client.getSessionState().user.id).toBe(firstUser.id);
+    await client.login({ email: second.email, password: second.password });
+    expect((await client.api.listPantry()).items).toEqual([]);
+    await expect(client.api.getPantryItem(item.id)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    await client.api.createPantryItem({
+      name: 'Private item',
+      categoryId: 1,
+      quantity: 1,
+      minimumQuantity: 0,
+      unit: 'kg',
+    });
+    await client.login({ email: family.email, password: family.password });
+    expect(
+      (await client.api.listPantry()).items.map((item) => item.quantity),
+    ).toEqual([3]);
+    await expect(
+      client.api.usePantryItem(item.id, { quantity: 1 }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    await expect(
+      client.authApi.addMember({ ...family, email: 'denied@example.com' }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
   it('registers safely without login and rejects duplicates or role injection', async () => {
     const client = loadSession(true);
     const data = {
@@ -251,7 +313,8 @@ describe('Explicit mock authentication follows the shared session', () => {
     expect(await client.authApi.register(data)).toMatchObject({
       name: 'Mock Member',
       email: 'new@example.com',
-      householdRole: 'member',
+      householdRole: 'admin',
+      householdId: expect.any(Number),
     });
     expect(client.getAccessToken()).toBeNull();
     await expect(client.authApi.register(data)).rejects.toMatchObject({
@@ -261,9 +324,11 @@ describe('Explicit mock authentication follows the shared session', () => {
       client.authApi.register({ ...data, role: 'owner' } as any),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
-  it('denies every anonymous mutation but permits public browsing', async () => {
+  it('denies anonymous reads and mutations', async () => {
     const client = loadSession(true);
-    expect((await client.api.listPantry()).items.length).toBeGreaterThan(0);
+    await expect(client.api.listPantry()).rejects.toMatchObject({
+      statusCode: 401,
+    });
     const calls = [
       () =>
         client.api.createPantryItem({
@@ -284,16 +349,15 @@ describe('Explicit mock authentication follows the shared session', () => {
     for (const call of calls)
       await expect(call()).rejects.toMatchObject({ statusCode: 401 });
   });
-  it('allows member writes, forbids member deletion, restores session, and honors logout', async () => {
+  it('forbids member writes, restores session, and honors logout', async () => {
     const client = loadSession(true);
     await client.login(input);
-    const entry = await client.api.createManualEntry({
-      name: 'Member test',
-      quantityToBuy: 1,
-    });
     await expect(
-      client.api.deleteShoppingEntry(entry.id),
+      client.api.createManualEntry({ name: 'Member test', quantityToBuy: 1 }),
     ).rejects.toMatchObject({ statusCode: 403 });
+    await expect(client.api.deleteShoppingEntry(1)).rejects.toMatchObject({
+      statusCode: 403,
+    });
     expect(client.getSessionState().status).toBe('authenticated');
     await client.restoreSession();
     expect(client.getSessionState().user.householdRole).toBe('member');

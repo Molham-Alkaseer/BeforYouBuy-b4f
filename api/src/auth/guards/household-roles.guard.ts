@@ -28,6 +28,7 @@ export class HouseholdRolesGuard implements CanActivate {
         'Your household role does not allow this action.',
       );
     }
+    user.householdId = membership.householdId;
     return true;
   }
 }

@@ -90,6 +90,7 @@ function ShoppingListSession() {
 
   const handleGenerate = async () => {
     if (isAnyActionRunning) return;
+    if (!isAdminOrOwner) return;
     if (!isAuthenticated) {
       requireSignIn();
       return;
@@ -118,6 +119,7 @@ function ShoppingListSession() {
   const handleAddManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAnyActionRunning) return;
+    if (!isAdminOrOwner) return;
     if (!isAuthenticated) {
       requireSignIn();
       return;
@@ -179,6 +181,7 @@ function ShoppingListSession() {
 
   const openPurchasePanel = (item: ShoppingEntry) => {
     if (isAnyActionRunning) return;
+    if (!isAdminOrOwner) return;
     if (!isAuthenticated) {
       requireSignIn();
       return;
@@ -192,6 +195,7 @@ function ShoppingListSession() {
   const handleConfirmPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAnyActionRunning || !purchasingItem) return;
+    if (!isAdminOrOwner) return;
     if (!isAuthenticated) {
       requireSignIn();
       return;
@@ -288,21 +292,13 @@ function ShoppingListSession() {
             generate again never adds an item twice
           </p>
         </div>
-        {isAuthenticated ? (
+        {isAdminOrOwner && (
           <button
             onClick={handleGenerate}
             disabled={isAnyActionRunning}
             className="shopping-btn-primary"
           >
             {isGenerating ? "Generating..." : "Generate shopping list"}
-          </button>
-        ) : (
-          <button
-            onClick={requireSignIn}
-            disabled={isAnyActionRunning}
-            className="shopping-btn-primary"
-          >
-            Sign in to generate
           </button>
         )}
       </div>
@@ -388,13 +384,13 @@ function ShoppingListSession() {
                 </span>
               </div>
               <div className="shopping-item-actions">
-                <button
+                {isAdminOrOwner && <button
                   onClick={() => openPurchasePanel(item)}
                   disabled={isAnyActionRunning}
                   className="shopping-btn-primary shopping-btn-small"
                 >
-                  {isAuthenticated ? "Mark purchased" : "Sign in to purchase"}
-                </button>
+                  Mark purchased
+                </button>}
                 {isAdminOrOwner && (
                   <button
                     onClick={() => handleDelete(item.id)}
@@ -419,7 +415,7 @@ function ShoppingListSession() {
           <p className="shopping-panel-desc">
             For things that are not pantry items, like birthday candles.
           </p>
-          {isAuthenticated ? (
+          {isAdminOrOwner ? (
             <form onSubmit={handleAddManual} className="shopping-form">
               <div className="shopping-form-row">
                 <div className="shopping-form-group shopping-flex-1">
@@ -462,12 +458,12 @@ function ShoppingListSession() {
             </form>
           ) : (
             <div className="shopping-empty">
-              Sign in to add your own entries.
+              Only your household admin can add entries.
             </div>
           )}
         </section>
 
-        {isAuthenticated && purchasingItem && (
+        {isAdminOrOwner && purchasingItem && (
           <section className="shopping-purchase-panel">
             <h2 className="shopping-panel-title">
               Mark {purchasingItem.name} as purchased

@@ -160,6 +160,7 @@ export interface SafeUser {
   name: string;
   createdAt: Timestamp;
   householdRole: HouseholdRole;
+  householdId: number;
 }
 
 export interface RegisterInput {
@@ -182,4 +183,6 @@ export interface AuthClient {
   register(input: RegisterInput): Promise<SafeUser>;
   login(input: LoginInput): Promise<LoginResult>;
   me(): Promise<SafeUser>;
+  listMembers(): Promise<{ items: SafeUser[] }>;
+  addMember(input: RegisterInput): Promise<SafeUser>;
 }

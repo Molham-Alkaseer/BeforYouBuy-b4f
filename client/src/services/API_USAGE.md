@@ -31,7 +31,7 @@ async function demoPantryUsage() {
 
 ## 2. Auth Client Usage
 
-The `authApi` export provides register, login, and me endpoints. It shares the same transport as `api`.
+The `authApi` export provides register, login, me, listMembers and addMember endpoints. It shares the same transport as `api`.
 
 ```typescript
 import { authApi } from "../services/api-client";
@@ -71,7 +71,7 @@ function MyComponent() {
 
 `useAuth()` returns `{ status, user, login, logout }`:
 - `status` — `"checking" | "anonymous" | "authenticated"`
-- `user` — `SafeUser | null` (id, email, name, createdAt, householdRole)
+- `user` — `SafeUser | null` (id, email, name, createdAt, householdRole, householdId)
 - `login(input): Promise<void>` — calls `/auth/login`, saves accessToken, sets authenticated status
 - `logout()` — clears token and session, sets anonymous status; issued JWTs remain valid until expiry
 
@@ -118,13 +118,14 @@ Mock accounts (development fixtures only):
 | admin@example.com | admin123 | admin |
 | owner@example.com | owner123 | owner |
 
-- Registration normalizes email, creates a member account; role/ID input is not accepted.
+- Registration normalizes email, creates an admin account in a separate empty household; role/ID input is not accepted.
 - Mock login/me/session expiration reproduce contract success and 400/401/403/409 outcomes.
 - Mock tokens are simulated development values, not a production JWT verifier.
 - Accounts and inventory are in memory; registration and inventory edits reset on reload. Fixed demo accounts can restore their mock token for up to two hours. Mock dates use 16 October 2026. Real backend dates use the current household day.
-- Reads are public. Mutations enforce session/role policy:
-  - Member delete → 403
-  - Admin/owner valid delete → 204
+- Pantry, shopping and dashboard reads require login and use the current household. The three built-in fixture accounts share demo household 1.
+- `authApi.addMember({ name, email, password })` adds a read-only family member to the admin's household; `authApi.listMembers()` lists that household's accounts.
+- Every member mutation returns 403. Admin/owner mutations enforce all existing business rules.
+- All application pages require a session. Add/edit and `/family` routes also require admin/owner access. Reads send the bearer token and invalidate the matching session on 401.
 - `resetMockState()` resets domain data, mock account/session state, and simulation to a documented deterministic baseline.
 
 To reset during tests:

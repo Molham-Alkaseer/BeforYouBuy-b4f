@@ -10,6 +10,7 @@ export class SafeUserDto {
   @ApiProperty() email: string;
   @ApiProperty({ format: 'date-time' }) createdAt: string;
   @ApiProperty({ enum: HOUSEHOLD_ROLES }) householdRole: HouseholdRole;
+  @ApiProperty() householdId: number;
 }
 export class LoginResponseDto {
   @ApiProperty() accessToken: string;

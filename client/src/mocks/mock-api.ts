@@ -64,6 +64,7 @@ interface MockAccount {
   password: string;
   name: string;
   role: HouseholdRole;
+  householdId: number;
 }
 
 interface MockState {
@@ -89,6 +90,7 @@ const MOCK_ACCOUNTS: MockAccount[] = [
     password: "member123",
     name: "Member User",
     role: "member",
+    householdId: 1,
   },
   {
     id: 2,
@@ -96,6 +98,7 @@ const MOCK_ACCOUNTS: MockAccount[] = [
     password: "admin123",
     name: "Admin User",
     role: "admin",
+    householdId: 1,
   },
   {
     id: 3,
@@ -103,6 +106,7 @@ const MOCK_ACCOUNTS: MockAccount[] = [
     password: "owner123",
     name: "Owner User",
     role: "owner",
+    householdId: 1,
   },
 ];
 
@@ -117,7 +121,7 @@ function findAccountByEmail(email: string): MockAccount | undefined {
 }
 
 function safeAccount(account: MockAccount): SafeUser {
-  return { id: account.id, name: account.name, email: account.email, createdAt: FIXED_NOW_ISO, householdRole: account.role };
+  return { id: account.id, name: account.name, email: account.email, createdAt: FIXED_NOW_ISO, householdRole: account.role, householdId: account.householdId };
 }
 function requireRole(allowedRoles: HouseholdRole[]): SafeUser {
   const token = getAccessToken();
@@ -295,10 +299,19 @@ function createInitialState(): MockState {
 }
 
 let state: MockState = createInitialState();
+const households = new Map<number, { pantryItems: StoredPantryRecord[]; shoppingEntries: StoredShoppingRecord[] }>();
+function householdData() {
+  const user = requireRole(['owner', 'admin', 'member']);
+  if (!households.has(user.householdId)) households.set(user.householdId, user.householdId === 1
+    ? { pantryItems: state.pantryItems, shoppingEntries: state.shoppingEntries }
+    : { pantryItems: [], shoppingEntries: [] });
+  return households.get(user.householdId)!;
+}
 
 export function resetMockState(): void {
   clearAccessToken();
   state = createInitialState();
+  households.clear();
   simulationConfig.latencyMs = 0;
   simulationConfig.mode = "normal";
 }
@@ -377,7 +390,7 @@ function enrichShoppingEntry(raw: StoredShoppingRecord): ShoppingEntry {
   let pantryStatuses: PantryStatus[] = [];
 
   if (raw.status === "Pending" && raw.pantryItemId !== null) {
-    const linkedItem = state.pantryItems.find((p) => p.id === raw.pantryItemId);
+    const linkedItem = householdData().pantryItems.find((p) => p.id === raw.pantryItemId);
     if (linkedItem) {
       pantryStatuses = calculateMockPantryStatus(
         linkedItem,
@@ -405,7 +418,7 @@ function computePendingSummary(): PendingSummary {
   if (simulationConfig.mode === "empty") {
     return { total: 0, linked: 0, manual: 0 };
   }
-  const pending = state.shoppingEntries.filter((e) => e.status === "Pending");
+  const pending = householdData().shoppingEntries.filter((e) => e.status === "Pending");
   const linked = pending.filter((e) => e.pantryItemId !== null).length;
   const manual = pending.length - linked;
   return {
@@ -460,11 +473,12 @@ export const mockApi = {
 
   async listPantry(query?: PantryQuery): Promise<PantryList> {
     await applySimulationGate();
+    requireRole(['owner', 'admin', 'member']);
     if (simulationConfig.mode === "empty") {
       return { asOfDate: FIXED_TODAY, items: [], total: 0 };
     }
 
-    let items = [...state.pantryItems]
+    let items = [...householdData().pantryItems]
       .sort((a, b) => a.id - b.id)
       .map(enrichPantryItem);
 
@@ -498,9 +512,10 @@ export const mockApi = {
 
   async getPantryItem(id: number): Promise<PantryItem> {
     await applySimulationGate();
+    requireRole(['owner', 'admin', 'member']);
     validateIdParam(id);
 
-    const found = state.pantryItems.find((item) => item.id === id);
+    const found = householdData().pantryItems.find((item) => item.id === id);
     if (!found) {
       throw new ApiError({
         statusCode: 404,
@@ -515,7 +530,7 @@ export const mockApi = {
 
   async createPantryItem(input: PantryInput): Promise<PantryItem> {
     await applySimulationGate();
-    requireRole(["owner", "admin", "member"]);
+    requireRole(["owner", "admin"]);
 
     const fieldErrors: Record<string, string[]> = {};
     const trimmedName = typeof input.name === "string" ? input.name.trim() : "";
@@ -571,7 +586,7 @@ export const mockApi = {
       });
     }
 
-    const duplicate = state.pantryItems.find(
+    const duplicate = householdData().pantryItems.find(
       (p) => normalizeName(p.name) === normalizeName(trimmedName),
     );
     if (duplicate) {
@@ -597,13 +612,13 @@ export const mockApi = {
       expiryDate,
     };
 
-    state.pantryItems.push(newRecord);
+    householdData().pantryItems.push(newRecord);
     return deepClone(enrichPantryItem(newRecord));
   },
 
   async updatePantryItem(id: number, input: PantryUpdate): Promise<PantryItem> {
     await applySimulationGate();
-    requireRole(["owner", "admin", "member"]);
+    requireRole(["owner", "admin"]);
     validateIdParam(id);
 
     if (!input || Object.keys(input).length === 0) {
@@ -615,7 +630,7 @@ export const mockApi = {
       });
     }
 
-    const existing = state.pantryItems.find((item) => item.id === id);
+    const existing = householdData().pantryItems.find((item) => item.id === id);
     if (!existing) {
       throw new ApiError({
         statusCode: 404,
@@ -713,7 +728,7 @@ export const mockApi = {
       nextCategoryId = input.categoryId;
     }
 
-    const duplicate = state.pantryItems.find(
+    const duplicate = householdData().pantryItems.find(
       (p) => p.id !== id && normalizeName(p.name) === normalizeName(nextName),
     );
     if (duplicate) {
@@ -744,10 +759,10 @@ export const mockApi = {
     input: { quantity: number },
   ): Promise<PantryItem> {
     await applySimulationGate();
-    requireRole(["owner", "admin", "member"]);
+    requireRole(["owner", "admin"]);
     validateIdParam(id);
 
-    const existing = state.pantryItems.find((item) => item.id === id);
+    const existing = householdData().pantryItems.find((item) => item.id === id);
     if (!existing) {
       throw new ApiError({
         statusCode: 404,
@@ -792,7 +807,7 @@ export const mockApi = {
     requireRole(["admin", "owner"]);
     validateIdParam(id);
 
-    const index = state.pantryItems.findIndex((item) => item.id === id);
+    const index = householdData().pantryItems.findIndex((item) => item.id === id);
     if (index === -1) {
       throw new ApiError({
         statusCode: 404,
@@ -802,8 +817,8 @@ export const mockApi = {
       });
     }
 
-    const item = state.pantryItems[index];
-    const hasPendingEntry = state.shoppingEntries.some(
+    const item = householdData().pantryItems[index];
+    const hasPendingEntry = householdData().shoppingEntries.some(
       (e) => e.status === "Pending" && e.pantryItemId === id,
     );
 
@@ -816,11 +831,12 @@ export const mockApi = {
       });
     }
 
-    state.pantryItems.splice(index, 1);
+    householdData().pantryItems.splice(index, 1);
   },
 
   async getDashboard(): Promise<Dashboard> {
     await applySimulationGate();
+    requireRole(['owner', 'admin', 'member']);
 
     if (simulationConfig.mode === "empty") {
       return {
@@ -842,7 +858,7 @@ export const mockApi = {
       };
     }
 
-    const enrichedItems = state.pantryItems.map(enrichPantryItem);
+    const enrichedItems = householdData().pantryItems.map(enrichPantryItem);
     const statusCounts: Record<PantryStatus, number> = {
       "LOW STOCK": 0,
       "USE SOON": 0,
@@ -874,7 +890,7 @@ export const mockApi = {
       .map((cat) => ({
         categoryId: cat.id,
         categoryName: cat.name,
-        count: state.pantryItems.filter((p) => p.categoryId === cat.id).length,
+        count: householdData().pantryItems.filter((p) => p.categoryId === cat.id).length,
       }));
 
     return deepClone({
@@ -889,6 +905,7 @@ export const mockApi = {
 
   async listShoppingEntries(query?: ShoppingQuery): Promise<ShoppingList> {
     await applySimulationGate();
+    requireRole(['owner', 'admin', 'member']);
 
     if (simulationConfig.mode === "empty") {
       return {
@@ -899,7 +916,7 @@ export const mockApi = {
       };
     }
 
-    let records = [...state.shoppingEntries];
+    let records = [...householdData().shoppingEntries];
 
     if (query?.status !== undefined) {
       records = records.filter((r) => r.status === query.status);
@@ -924,9 +941,9 @@ export const mockApi = {
 
   async generateShoppingList(): Promise<GenerateResult> {
     await applySimulationGate();
-    requireRole(["owner", "admin", "member"]);
+    requireRole(["owner", "admin"]);
 
-    const enrichedPantry = [...state.pantryItems]
+    const enrichedPantry = [...householdData().pantryItems]
       .sort((a, b) => a.id - b.id)
       .map(enrichPantryItem);
 
@@ -936,7 +953,7 @@ export const mockApi = {
         item.statuses.includes("EXPIRED"),
     );
 
-    const pendingEntries = state.shoppingEntries.filter(
+    const pendingEntries = householdData().shoppingEntries.filter(
       (e) => e.status === "Pending",
     );
 
@@ -977,7 +994,7 @@ export const mockApi = {
       );
 
       if (!existingEntry) {
-        state.shoppingEntries.push({
+        householdData().shoppingEntries.push({
           id: state.nextShoppingId++,
           name: item.name,
           quantityToBuy: suggestedQty,
@@ -1024,7 +1041,7 @@ export const mockApi = {
     quantityToBuy: number;
   }): Promise<ShoppingEntry> {
     await applySimulationGate();
-    requireRole(["owner", "admin", "member"]);
+    requireRole(["owner", "admin"]);
 
     const fieldErrors: Record<string, string[]> = {};
     const trimmedName =
@@ -1050,7 +1067,7 @@ export const mockApi = {
       });
     }
 
-    const duplicatePending = state.shoppingEntries.find(
+    const duplicatePending = householdData().shoppingEntries.find(
       (e) =>
         e.status === "Pending" &&
         normalizeName(e.name) === normalizeName(trimmedName),
@@ -1082,7 +1099,7 @@ export const mockApi = {
       newExpiryDate: null,
     };
 
-    state.shoppingEntries.push(newEntry);
+    householdData().shoppingEntries.push(newEntry);
     return deepClone(enrichShoppingEntry(newEntry));
   },
 
@@ -1091,10 +1108,10 @@ export const mockApi = {
     input: PurchaseInput,
   ): Promise<PurchaseResult> {
     await applySimulationGate();
-    requireRole(["owner", "admin", "member"]);
+    requireRole(["owner", "admin"]);
     validateIdParam(id);
 
-    const entry = state.shoppingEntries.find((e) => e.id === id);
+    const entry = householdData().shoppingEntries.find((e) => e.id === id);
     if (!entry) {
       throw new ApiError({
         statusCode: 404,
@@ -1168,7 +1185,7 @@ export const mockApi = {
       });
     }
 
-    const linkedItem = state.pantryItems.find(
+    const linkedItem = householdData().pantryItems.find(
       (p) => p.id === entry.pantryItemId,
     );
     if (!linkedItem) {
@@ -1237,7 +1254,7 @@ export const mockApi = {
     requireRole(["admin", "owner"]);
     validateIdParam(id);
 
-    const index = state.shoppingEntries.findIndex((e) => e.id === id);
+    const index = householdData().shoppingEntries.findIndex((e) => e.id === id);
     if (index === -1) {
       throw new ApiError({
         statusCode: 404,
@@ -1247,7 +1264,7 @@ export const mockApi = {
       });
     }
 
-    const entry = state.shoppingEntries[index];
+    const entry = householdData().shoppingEntries[index];
     if (entry.status === "Purchased") {
       throw new ApiError({
         statusCode: 409,
@@ -1257,7 +1274,7 @@ export const mockApi = {
       });
     }
 
-    state.shoppingEntries.splice(index, 1);
+    householdData().shoppingEntries.splice(index, 1);
   },
 
   async register(input: RegisterInput): Promise<SafeUser> {
@@ -1265,7 +1282,22 @@ export const mockApi = {
     validateAuthInput(input, true);
     const email = input.email.trim().toLowerCase();
     if (findAccountByEmail(email)) throw new ApiError({ statusCode: 409, code: 'EMAIL_ALREADY_EXISTS', message: 'An account with this email already exists.', fieldErrors: { email: ['This email is already registered.'] } });
-    const account: MockAccount = { id: state.nextAccountId++, email, name: input.name.trim(), password: input.password, role: 'member' };
+    const account: MockAccount = { id: state.nextAccountId++, email, name: input.name.trim(), password: input.password, role: 'admin', householdId: state.nextAccountId };
+    state.accounts.push(account);
+    return safeAccount(account);
+  },
+  async listMembers(): Promise<{ items: SafeUser[] }> {
+    await applySimulationGate();
+    const actor = requireRole(['owner', 'admin']);
+    return { items: state.accounts.filter(account => account.householdId === actor.householdId).map(safeAccount) };
+  },
+  async addMember(input: RegisterInput): Promise<SafeUser> {
+    await applySimulationGate();
+    const actor = requireRole(['owner', 'admin']);
+    validateAuthInput(input, true);
+    const email = input.email.trim().toLowerCase();
+    if (findAccountByEmail(email)) throw new ApiError({ statusCode: 409, code: 'EMAIL_ALREADY_EXISTS', message: 'This email is already registered.', fieldErrors: { email: ['Use an unregistered email.'] } });
+    const account: MockAccount = { id: state.nextAccountId++, email, name: input.name.trim(), password: input.password, role: 'member', householdId: actor.householdId };
     state.accounts.push(account);
     return safeAccount(account);
   },

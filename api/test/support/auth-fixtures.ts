@@ -15,6 +15,7 @@ export const TEST_PASSWORD = 'test-password-123';
 export async function createAccount(
   app: INestApplication,
   role: HouseholdRole = 'member',
+  householdId = 1,
 ) {
   const connection = app.get<Connection>(getConnectionToken());
   if (!connection.name.startsWith('byb_test_'))
@@ -26,10 +27,7 @@ export async function createAccount(
     .expect(201);
   await connection
     .collection('household_members')
-    .updateOne(
-      { householdId: 1, userId: registered.body.id },
-      { $set: { role } },
-    );
+    .updateOne({ userId: registered.body.id }, { $set: { role, householdId } });
   const loggedIn = await request(app.getHttpServer())
     .post('/api/auth/login')
     .send({ email, password: TEST_PASSWORD })

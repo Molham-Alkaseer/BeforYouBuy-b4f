@@ -35,17 +35,21 @@ export class ShoppingListController {
   constructor(private readonly shoppingListService: ShoppingListService) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard, HouseholdRolesGuard)
+  @HouseholdRoles('owner', 'admin', 'member')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'List entries and current Pending counts' })
   findAll(
+    @CurrentUser() user: RequestUser,
     @Query() query: FindShoppingListQueryDto,
     @Body(new NoFieldsPipe('body')) _body: object,
   ) {
-    return this.shoppingListService.findAll(query);
+    return this.shoppingListService.findAll(query, user.householdId);
   }
 
   @Post('generate')
   @UseGuards(JwtAuthGuard, HouseholdRolesGuard)
-  @HouseholdRoles('owner', 'admin', 'member')
+  @HouseholdRoles('owner', 'admin')
   @ApiBearerAuth()
   @ApiResponse({ status: 401, description: 'Sign in required.' })
   @ApiResponse({ status: 403, description: 'Household membership required.' })
@@ -63,12 +67,15 @@ export class ShoppingListController {
     @Query(new NoFieldsPipe('query')) _query: object,
     @Body(new NoFieldsPipe('body')) _body: object,
   ) {
-    return this.shoppingListService.generateShoppingList(user.sub);
+    return this.shoppingListService.generateShoppingList(
+      user.sub,
+      user.householdId,
+    );
   }
 
   @Post()
   @UseGuards(JwtAuthGuard, HouseholdRolesGuard)
-  @HouseholdRoles('owner', 'admin', 'member')
+  @HouseholdRoles('owner', 'admin')
   @ApiBearerAuth()
   @ApiResponse({ status: 401, description: 'Sign in required.' })
   @ApiResponse({ status: 403, description: 'Household membership required.' })
@@ -78,12 +85,16 @@ export class ShoppingListController {
     @Body() dto: CreateManualEntryDto,
     @Query(new NoFieldsPipe('query')) _query: object,
   ) {
-    return this.shoppingListService.addManualEntry(dto, user.sub);
+    return this.shoppingListService.addManualEntry(
+      dto,
+      user.sub,
+      user.householdId,
+    );
   }
 
   @Post(':id/purchase')
   @UseGuards(JwtAuthGuard, HouseholdRolesGuard)
-  @HouseholdRoles('owner', 'admin', 'member')
+  @HouseholdRoles('owner', 'admin')
   @ApiBearerAuth()
   @ApiResponse({ status: 401, description: 'Sign in required.' })
   @ApiResponse({ status: 403, description: 'Household membership required.' })
@@ -102,7 +113,12 @@ export class ShoppingListController {
     @Body() dto: PurchaseEntryDto,
     @Query(new NoFieldsPipe('query')) _query: object,
   ) {
-    return this.shoppingListService.purchaseEntry(id, dto, user.sub);
+    return this.shoppingListService.purchaseEntry(
+      id,
+      dto,
+      user.sub,
+      user.householdId,
+    );
   }
 
   @Delete(':id')
@@ -119,6 +135,6 @@ export class ShoppingListController {
     @Query(new NoFieldsPipe('query')) _query: object,
     @Body(new NoFieldsPipe('body')) _body: object,
   ) {
-    return this.shoppingListService.deleteEntry(id, user.sub);
+    return this.shoppingListService.deleteEntry(id, user.sub, user.householdId);
   }
 }

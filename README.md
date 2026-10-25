@@ -4,11 +4,11 @@ Household pantry assistant built with React, NestJS and MongoDB.
 
 ## Current status
 
-All six members' contributions are integrated on `member-molham`: existing navigation, dashboard, pantry and shopping UI, plus registration, login, verified JWTs and current household roles. Public browsing remains available; normal writes require a signed-in household member, and deletion requires an admin or owner.
+All six members' contributions are integrated on `member-molham`: existing navigation, dashboard, pantry and shopping UI, plus registration, login, verified JWTs and current household roles. As of 26 October 2026, all pantry, dashboard and shopping pages require sign-in. Each public signup creates an admin with a separate household. Family members have read-only access; admins manage all changes.
 
 The upgrade keeps React/Vite, NestJS 10 and MongoDB. It adopts the B4F authentication patterns without replacing the pantry product or its transaction guarantees. The production auth bridge is connected to the live API; mock mode is explicitly selectable for development.
 
-See the current [tasks 2 integration report](docs/tasks2-integration.md) and authoritative [API contract v2](Tasks/apicontract.md). Older integration reports remain historical evidence.
+See the current [household access update](docs/household-access.md) and authoritative [API contract v3](Tasks/apicontract.md). The [tasks 2 integration report](docs/tasks2-integration.md) records the previous shared-demo policy.
 
 ## Folders and setup
 
@@ -26,7 +26,7 @@ npm run db:start
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-The Windows database script defaults to MongoDB 8.0's installation path. Pass `-MongoExe` directly to `scripts/start-local-mongo.ps1` for another installation.
+The Windows database script finds `mongod` on PATH or the newest installed MongoDB Server version. Pass `-MongoExe` to `scripts/start-local-mongo.ps1` to choose an installation explicitly.
 
 Configure `api/.env`:
 
@@ -55,14 +55,15 @@ The database script runs a localhost-only replica set on port 27018, with data i
 | Shopping | GET/POST /shopping-list; POST /shopping-list/generate; POST /shopping-list/:id/purchase; DELETE /shopping-list/:id |
 | Dashboard | GET /dashboard |
 | Authentication | POST /auth/register; POST /auth/login; GET /auth/me |
+| Family accounts | GET/POST /household/members (admin/owner only) |
 
 All paths are relative to /api. Generate, use and purchase return 200; resource creation returns 201; deletion returns empty 204. Manual entries are created at POST /shopping-list, not /shopping-list/manual.
 
-Category mutations require only `x-internal-tool-key`. Keep that key in backend/internal tooling; never include it in React. [Category HTTP examples](docs/categories.http) are provided. Pantry create/edit/use and shopping create/generate/purchase require JWT plus owner/admin/member membership. Pantry/shopping deletion requires owner/admin and still enforces Pending/history restrictions. Reads remain public; `/auth/me` requires JWT.
+Category mutations require only `x-internal-tool-key`. Keep that key in backend/internal tooling; never include it in React. [Category HTTP examples](docs/categories.http) are provided. Every pantry/shopping mutation requires JWT plus admin/owner membership, including use, generate and purchase. Pantry, shopping and dashboard reads require a valid household account and are filtered by its server-side household ID. The shared category catalog remains public; its mutations remain internal tooling only.
 
 ## Accounts and roles
 
-Register at `/register` with a name, email and password (8 or more characters, at most 72 UTF-8 bytes). Registration returns a safe user and asks you to sign in. New users always become `member` in shared household 1; inventory is household-wide. The server normalizes emails, hashes passwords with bcrypt, and atomically creates the user and membership with persistent numeric IDs.
+Register at `/register` with a name, email and password (8 or more characters, at most 72 UTF-8 bytes). Registration returns a safe user and asks you to sign in. Public signup creates an `admin` in a new, empty household. In **Family members** (`/family`), an admin enters a name, unused email and password to create a read-only `member` in that same household. Share those sign-in details directly with the family member. This does not sign the admin out or send email. Existing registered emails cannot be moved or added through this form. The server normalizes emails, hashes passwords with bcrypt, and atomically creates the user and membership with persistent numeric IDs.
 
 To explicitly promote an **existing registered account**, run from `api/`:
 
@@ -81,7 +82,7 @@ DTOs validate bodies and queries, reject extra fields, and retain strict numeric
 
 Categories, pantry items and shopping entries live in separate collections linked through numeric application IDs. This centralizes category names and preserves historical purchase snapshots independently of current stock. No ObjectId relationship, populate or aggregation pipeline is used.
 
-DatabaseModule registers the domain schemas plus users and household memberships, initializes correctness indexes, and exports their models. It binds Mustafa's dependency aliases to the same ClockService, IdsService and WriteService used by the other domains. Domains do not import one another's services. Accounts have unique numeric IDs and normalized emails; memberships have unique numeric IDs and a unique `(householdId, userId)` index.
+DatabaseModule registers the domain schemas plus users and household memberships, initializes correctness indexes, and exports their models. It binds Mustafa's dependency aliases to the same ClockService, IdsService and WriteService used by the other domains. Domains do not import one another's services. Accounts have unique numeric IDs and normalized emails; memberships have unique numeric IDs and unique `userId` and `(householdId, userId)` indexes. Pantry items and shopping entries carry `householdId`; normalized pantry and Pending shopping names are unique within a household. The same item name can exist in different households.
 
 IdsService uses persistent counters and atomic increments; deleting a record never resets its counter. Existing domain create operations may allocate before a retryable transaction, so failures may leave ID gaps. Generation and registration allocate within the transaction using the same session, rolling back counter changes with failed writes.
 
@@ -99,7 +100,7 @@ Every category, pantry and shopping mutation, account registration and explicit 
 
 ## Seed, dates and mock mode
 
-SEED_ON_START=true seeds 7 categories and 20 items only when application collections are empty and no completed seed marker exists. Inserts, initial counters and the marker commit atomically. Existing data survives restarts and partial seed failures roll back.
+SEED_ON_START=true seeds 7 categories and 20 items only when application collections are empty and no completed seed marker exists. Inserts, initial counters and the marker commit atomically. Existing data survives restarts and partial seed failures roll back. Demo inventory belongs to reserved household 1; newly registered admins start empty. Startup assigns unscoped legacy pantry/shopping data to household 1 and replaces only the old global name indexes with household-scoped indexes. Existing account roles and household assignments are preserved; legacy members remain read-only until explicitly promoted with the CLI.
 
 Expiry offsets are relative to the household date. The seed gives 5 LOW STOCK, 3 USE SOON, 2 EXPIRED and 12 OK items; statuses overlap. Computed labels are never stored. Shopping/history is optional and not seeded automatically: generate creates current suggestions.
 
@@ -120,11 +121,11 @@ npm --prefix client run lint
 node api/scripts/measure-index.cjs
 ```
 
-The original 100 regression cases remain, with additional shopping-log, authentication, permission and session tests. Tests use disposable `byb_test_*` databases on port 27018 and real guards, including distinct member/admin/owner fixtures. The [integration report](docs/tasks2-integration.md) records current counts, browser coverage and limitations.
+The existing business regressions remain, with additional shopping-log, authentication, permission, household-isolation and session tests. Tests use disposable `byb_test_*` databases on port 27018 and real guards, including distinct member/admin/owner fixtures. The [household access report](docs/household-access.md) records the current 185 passing tests across 12 suites and verification limits. The previous integration report is historical.
 
 `node api/scripts/backup-local.cjs` saves a BSON-preserving snapshot under ignored `api/.local/backups` without changing database records. Keep backups private because they include account data/password hashes.
 
-After building the API, `node api/scripts/verify-auth-restart.cjs` verifies stock, history, accounts, memberships and counters across actual API and MongoDB process restarts. It creates its own isolated replica set on free localhost ports, leaving port 27018 running. Set `MONGO_EXE` if mongod is installed outside the default Windows MongoDB 8.0 path. [Current restart evidence](docs/tasks2-restart-evidence.json) is committed. The older `verify-db-restart.cjs` restarts the shared test instance and should only be used when no one else is using it.
+After building the API, `node api/scripts/verify-auth-restart.cjs` verifies stock, history, accounts, memberships and counters across actual API and MongoDB process restarts. It creates its own isolated replica set on free localhost ports, leaving port 27018 running. Set `MONGO_EXE` if mongod is installed outside the default Windows MongoDB 8.0 path. See [current restart evidence](docs/household-restart-evidence.json). The older `verify-db-restart.cjs` restarts the shared test instance and should only be used when no one else is using it.
 
 ## Actual query and index decision
 

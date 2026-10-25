@@ -25,7 +25,7 @@ export default function RegisterScreen({
   return (
     <section className="auth-page">
       <h1>Create your account</h1>
-      <p className="auth-intro">Register to add and edit items in your pantry.</p>
+      <p className="auth-intro">Create your own household as its admin. You can then add family members with read-only access.</p>
 
       <RegisterForm
         onRegister={onRegister}

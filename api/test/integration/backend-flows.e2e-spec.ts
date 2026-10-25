@@ -53,7 +53,10 @@ describe('Integrated pantry, shopping, categories and dashboard', () => {
     connection = app.get(getConnectionToken());
     token = (await createAccount(app, 'admin')).token;
   }
-  const get = (path: string) => request(app.getHttpServer()).get('/api' + path);
+  const get = (path: string) =>
+    request(app.getHttpServer())
+      .get('/api' + path)
+      .set('Authorization', 'Bearer ' + token);
   const post = (path: string, body?: object) =>
     request(app.getHttpServer())
       .post('/api' + path)
@@ -86,6 +89,7 @@ describe('Integrated pantry, shopping, categories and dashboard', () => {
       ...fixture.shoppingPurchased.items,
     ].map(({ pantryStatuses, ...entry }) => ({
       ...entry,
+      householdId: 1,
       normalizedName: entry.name.trim().toLowerCase(),
       createdAt: new Date(entry.createdAt),
       purchasedAt: entry.purchasedAt ? new Date(entry.purchasedAt) : null,

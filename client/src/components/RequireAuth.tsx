@@ -3,7 +3,7 @@ import LoadingMessage from "./LoadingMessage";
 import { useAuth } from "../features/session/useAuth";
 
 export default function RequireAuth() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const location = useLocation();
 
   if (status === "checking") {
@@ -20,5 +20,5 @@ export default function RequireAuth() {
     );
   }
 
-  return <Outlet />;
+  return <Outlet key={`${user?.id}:${user?.householdId}:${user?.householdRole}`} />;
 }

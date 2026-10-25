@@ -14,8 +14,6 @@ interface LoginFormProps {
   onSuccess: () => void;
   // Where the Register link goes. The page decides it, including a safe returnTo.
   registerPath: string;
-  // Where "keep browsing" goes (public pages).
-  browsePath: string;
   // Email handed over from the register page. Never a password.
   initialEmail?: string;
 }
@@ -27,7 +25,6 @@ export default function LoginForm({
   onLogin,
   onSuccess,
   registerPath,
-  browsePath,
   initialEmail = '',
 }: LoginFormProps) {
   const [values, setValues] = useState<LoginValues>({
@@ -156,7 +153,6 @@ export default function LoginForm({
 
       <p className="auth-links">
         <Link to={registerPath}>Create an account</Link>
-        <Link to={browsePath}>Keep browsing</Link>
       </p>
     </form>
   );

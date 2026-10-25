@@ -13,9 +13,9 @@ export function useItemSession(): ItemSession {
   return { status, role };
 }
 
-// Add, edit and use: member, admin and owner, once the sign-in is confirmed.
+// Family members can read; only admins manage stock.
 export function canWriteItems(session: ItemSession): boolean {
-  return session.status === 'authenticated' && session.role !== null;
+  return canDeleteItems(session);
 }
 
 // Delete: admin and owner only. The server still checks it too.

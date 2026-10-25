@@ -3,7 +3,6 @@ import { getConnectionToken } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
 import { AppModule } from '../app.module';
 import {
-  HOUSEHOLD_ID,
   HOUSEHOLD_ROLES,
   HouseholdRole,
 } from '../household-members/schemas/household-member.schema';
@@ -33,11 +32,7 @@ async function main() {
       if (!user) throw new Error('Register the account first.');
       const result = await connection
         .collection('household_members')
-        .updateOne(
-          { householdId: HOUSEHOLD_ID, userId: user.id },
-          { $set: { role } },
-          { session },
-        );
+        .updateOne({ userId: user.id }, { $set: { role } }, { session });
       if (result.matchedCount !== 1)
         throw new Error('The account has no household membership.');
       return user.id;

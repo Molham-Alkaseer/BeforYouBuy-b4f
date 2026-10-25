@@ -24,6 +24,7 @@ const statuses: { status: PantryStatus; description: string }[] = [
 export default function DashboardPage() {
   const { status, user } = useAuth();
   const userId = user?.id;
+  const canManage = user?.householdRole === "admin" || user?.householdRole === "owner";
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,7 +63,7 @@ export default function DashboardPage() {
   }, [reload, invalidateRequest]);
 
   async function generate() {
-    if (status !== "authenticated" || !user || generationPending.current)
+    if (!canManage || status !== "authenticated" || !user || generationPending.current)
       return;
     const sessionKey = `authenticated:${user.id}`;
     generationPending.current = true;
@@ -116,21 +117,9 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
-        {status === "anonymous" ? (
-          <Link className="byb-button" to="/login?returnTo=%2F">
-            Sign in to generate
-          </Link>
-        ) : (
-          <button
-            className="byb-button"
-            disabled={generating || status !== "authenticated" || !user}
-            onClick={() => void generate()}
-          >
-            {generating
-              ? "Generating…"
-              : status === "checking"
-                ? "Checking session…"
-                : "Generate shopping list"}
+        {canManage && (
+          <button className="byb-button" disabled={generating} onClick={() => void generate()}>
+            {generating ? "Generating…" : "Generate shopping list"}
           </button>
         )}
       </header>

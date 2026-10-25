@@ -18,12 +18,12 @@ export class DashboardService {
     @Inject(PANTRY_CLOCK) private readonly clock: PantryClock,
   ) {}
 
-  async summary(): Promise<DashboardResponse> {
+  async summary(householdId: number): Promise<DashboardResponse> {
     const asOfDate = this.clock.today();
     const [stored, categories, pending] = await Promise.all([
-      this.items.find().lean().exec(),
+      this.items.find({ householdId }).lean().exec(),
       this.categories.find().sort({ id: 1 }).lean().exec(),
-      this.entries.find({ status: 'Pending' }).lean().exec(),
+      this.entries.find({ householdId, status: 'Pending' }).lean().exec(),
     ]);
     const names = new Map(
       categories.map((category) => [category.id, category.name]),

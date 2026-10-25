@@ -13,7 +13,8 @@ export class HouseholdMember {
     validate: Number.isSafeInteger,
   })
   id: number;
-  @Prop({ required: true, enum: [HOUSEHOLD_ID] }) householdId: number;
+  @Prop({ required: true, min: 1, validate: Number.isSafeInteger })
+  householdId: number;
   @Prop({ required: true, min: 1, validate: Number.isSafeInteger })
   userId: number;
   @Prop({ required: true, enum: HOUSEHOLD_ROLES }) role: HouseholdRole;
@@ -22,3 +23,5 @@ export class HouseholdMember {
 export const HouseholdMemberSchema =
   SchemaFactory.createForClass(HouseholdMember);
 HouseholdMemberSchema.index({ householdId: 1, userId: 1 }, { unique: true });
+// Each account belongs to exactly one family.
+HouseholdMemberSchema.index({ userId: 1 }, { unique: true });

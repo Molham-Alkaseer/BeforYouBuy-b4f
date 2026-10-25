@@ -4,9 +4,8 @@ import { getAccessToken, getTokenRevision, invalidateAccessToken } from './sessi
 export const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const normalizedPath = path.startsWith('/') ? path : '/' + path;
-  const method = (options?.method ?? 'GET').toUpperCase();
   const publicAuth = normalizedPath === '/auth/login' || normalizedPath === '/auth/register';
-  const protectedRequest = !publicAuth && (normalizedPath === '/auth/me' || !['GET', 'HEAD'].includes(method));
+  const protectedRequest = !publicAuth;
   let token = protectedRequest ? getAccessToken() : null;
   const tokenRevision = getTokenRevision();
   // Fixture tokens must never be sent to the real backend.

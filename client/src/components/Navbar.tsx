@@ -1,23 +1,14 @@
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../features/session/useAuth";
 
 export default function Navbar() {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const { status, user, logout } = useAuth();
-  const addItemTo =
-    status !== "anonymous"
-      ? "/pantry/new"
-      : `/login?${new URLSearchParams({ returnTo: "/pantry/new" })}`;
+  const canManage = status === "authenticated" &&
+    (user?.householdRole === "admin" || user?.householdRole === "owner");
 
   function signOut() {
     logout();
-    if (
-      pathname === "/pantry/new" ||
-      /^\/pantry\/[^/]+\/edit$/.test(pathname)
-    ) {
-      navigate("/pantry", { replace: true });
-    }
   }
 
   return (
@@ -26,6 +17,7 @@ export default function Navbar() {
         <span aria-hidden="true">✓</span>Before You Buy
       </NavLink>
       <nav aria-label="Main navigation">
+        {status === "authenticated" && <>
         <NavLink to="/" end>
           Dashboard
         </NavLink>
@@ -33,7 +25,9 @@ export default function Navbar() {
           Pantry
         </NavLink>
         <NavLink to="/shopping-list">Shopping list</NavLink>
-        <NavLink to={addItemTo}>Add item</NavLink>
+        {canManage && <NavLink to="/pantry/new">Add item</NavLink>}
+        {canManage && <NavLink to="/family">Family members</NavLink>}
+        </>}
         {status === "anonymous" && (
           <>
             <NavLink to="/login">Sign in</NavLink>

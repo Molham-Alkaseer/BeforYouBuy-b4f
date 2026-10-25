@@ -50,15 +50,14 @@ describe('Household permissions on real domain routes', () => {
   }
 
   it.each([
-    '/categories',
     '/pantry',
     '/pantry/1',
     '/dashboard',
     '/shopping-list?status=Purchased',
-  ])('keeps anonymous GET %s public', async (path) => {
+  ])('rejects anonymous GET %s', async (path) => {
     await request(ctx.app.getHttpServer())
       .get('/api' + path)
-      .expect(200);
+      .expect(401);
   });
 
   it.each([
@@ -91,7 +90,7 @@ describe('Household permissions on real domain routes', () => {
     },
   );
 
-  it.each(['member', 'admin', 'owner'] as const)(
+  it.each(['admin', 'owner'] as const)(
     'allows %s to create/edit/use/generate/add/purchase',
     async (role) => {
       const account = { member, admin, owner }[role];
@@ -136,15 +135,12 @@ describe('Household permissions on real domain routes', () => {
   it('denies member deletion and honors an immediate role change with the same token', async () => {
     const account = await createAccount(ctx.app);
     const item = (
-      await write(
-        'post',
-        '/pantry',
-        account.token,
-        input('Role changed'),
-      ).expect(201)
+      await write('post', '/pantry', admin.token, input('Role changed')).expect(
+        201,
+      )
     ).body;
     const entry = (
-      await write('post', '/shopping-list', account.token, {
+      await write('post', '/shopping-list', admin.token, {
         name: 'Role change entry',
         quantityToBuy: 1,
       }).expect(201)
@@ -203,23 +199,23 @@ describe('Household permissions on real domain routes', () => {
   );
 
   it('rejects actor/role injection and still enforces stock limits after authorization', async () => {
-    await write('post', '/pantry', member.token, {
+    await write('post', '/pantry', admin.token, {
       ...input('Injection'),
       actorId: admin.id,
     }).expect(400);
-    await write('post', '/shopping-list', member.token, {
+    await write('post', '/shopping-list', admin.token, {
       name: 'Injection',
       quantityToBuy: 1,
       role: 'owner',
     }).expect(400);
     const item = (
-      await write('post', '/pantry', member.token, input('No overuse')).expect(
+      await write('post', '/pantry', admin.token, input('No overuse')).expect(
         201,
       )
     ).body;
     expect(
       (
-        await write('post', '/pantry/' + item.id + '/use', member.token, {
+        await write('post', '/pantry/' + item.id + '/use', admin.token, {
           quantity: 99,
         }).expect(400)
       ).body.code,
@@ -250,9 +246,10 @@ describe('Household permissions on real domain routes', () => {
       for (const [method, operation] of Object.entries(methods)) {
         const protectedOperation =
           path === '/api/auth/me' ||
-          ((path.startsWith('/api/pantry') ||
-            path.startsWith('/api/shopping-list')) &&
-            method !== 'get');
+          path.startsWith('/api/pantry') ||
+          path.startsWith('/api/shopping-list') ||
+          path.startsWith('/api/dashboard') ||
+          path.startsWith('/api/household');
         if (protectedOperation)
           expect(operation.security).toEqual([{ bearer: [] }]);
         else expect(operation.security).toBeUndefined();

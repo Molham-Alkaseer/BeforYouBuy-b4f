@@ -31,7 +31,9 @@ import { LoginResponseDto, SafeUserDto } from './dto/auth-response.dto';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
   @Post('register')
-  @ApiOperation({ summary: 'Register a member of the shared household' })
+  @ApiOperation({
+    summary: 'Create an admin account with a separate, empty household',
+  })
   @ApiCreatedResponse({ type: SafeUserDto })
   @ApiResponse({ status: 409, description: 'Email already registered.' })
   register(

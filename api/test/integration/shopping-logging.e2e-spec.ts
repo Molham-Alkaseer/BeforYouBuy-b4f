@@ -58,6 +58,7 @@ describe('Shopping business logs and atomic purchases', () => {
       101,
       { purchasedQuantity: 2 },
       actor,
+      1,
     );
     expect(Object.keys(result).sort()).toEqual(['entry', 'pantryItem']);
     expect(result.pantryItem.quantity).toBe(5);
@@ -74,6 +75,7 @@ describe('Shopping business logs and atomic purchases', () => {
       102,
       { purchasedQuantity: 2, newExpiryDate: '2026-10-30' },
       actor,
+      1,
     );
     expect(Object.keys(result).sort()).toEqual(['entry', 'pantryItem']);
     expect(result.pantryItem).toMatchObject({
@@ -94,7 +96,7 @@ describe('Shopping business logs and atomic purchases', () => {
     await setStock(2, 3);
     const before = await harness.snapshot();
     const body = await rejection(
-      service.purchaseEntry(102, { purchasedQuantity: 2 }, actor),
+      service.purchaseEntry(102, { purchasedQuantity: 2 }, actor, 1),
     );
     expect(body).toMatchObject({
       statusCode: 400,
@@ -115,6 +117,7 @@ describe('Shopping business logs and atomic purchases', () => {
       107,
       { purchasedQuantity: 1 },
       actor,
+      1,
     );
     expect(result.pantryItem).toBeNull();
     expect(result.entry).toMatchObject({
@@ -144,7 +147,7 @@ describe('Shopping business logs and atomic purchases', () => {
       .spyOn(model.collection, 'updateOne')
       .mockRejectedValueOnce(transient);
     try {
-      await service.purchaseEntry(101, { purchasedQuantity: 2 }, actor);
+      await service.purchaseEntry(101, { purchasedQuantity: 2 }, actor, 1);
       // The callback ran twice: first attempt rejected, second committed.
       expect(save).toHaveBeenCalledTimes(2);
     } finally {
@@ -166,7 +169,7 @@ describe('Shopping business logs and atomic purchases', () => {
       .mockRejectedValueOnce(new Error('Injected history save failure'));
     try {
       await expect(
-        service.purchaseEntry(101, { purchasedQuantity: 2 }, actor),
+        service.purchaseEntry(101, { purchasedQuantity: 2 }, actor, 1),
       ).rejects.toThrow('Injected history save failure');
     } finally {
       failure.mockRestore();
@@ -181,7 +184,7 @@ describe('Shopping business logs and atomic purchases', () => {
     await setStock(1, 3);
     const results = await Promise.allSettled(
       Array.from({ length: 8 }, () =>
-        service.purchaseEntry(101, { purchasedQuantity: 2 }, actor),
+        service.purchaseEntry(101, { purchasedQuantity: 2 }, actor, 1),
       ),
     );
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
@@ -204,8 +207,8 @@ describe('Shopping business logs and atomic purchases', () => {
   });
 
   it('repeat generation keeps one Pending entry per item and logs counts with actor', async () => {
-    const first = await service.generateShoppingList(actor);
-    const second = await service.generateShoppingList(actor);
+    const first = await service.generateShoppingList(actor, 1);
+    const second = await service.generateShoppingList(actor, 1);
     expect(second).toMatchObject({ added: 0, updated: 0 });
     expect(second.unchanged).toBe(
       first.added + first.updated + first.unchanged,
@@ -224,16 +227,17 @@ describe('Shopping business logs and atomic purchases', () => {
   });
 
   it('a generation name conflict rolls everything back with one warning', async () => {
-    await service.deleteEntry(101, actor);
-    await service.deleteEntry(102, actor);
+    await service.deleteEntry(101, actor, 1);
+    await service.deleteEntry(102, actor, 1);
     const manual = await service.addManualEntry(
       { name: 'Yoghurt', quantityToBuy: 1 },
       actor,
+      1,
     );
     const before = await harness.snapshot();
     logs.restore();
     logs = captureShoppingLogs();
-    const body = await rejection(service.generateShoppingList(actor));
+    const body = await rejection(service.generateShoppingList(actor, 1));
     expect(body).toMatchObject({
       statusCode: 409,
       code: 'PENDING_NAME_CONFLICT',
@@ -249,15 +253,17 @@ describe('Shopping business logs and atomic purchases', () => {
     const created = await service.addManualEntry(
       { name: 'Secret napkins', quantityToBuy: 2 },
       actor,
+      1,
     );
     await rejection(
       service.addManualEntry(
         { name: ' secret NAPKINS ', quantityToBuy: 1 },
         actor,
+        1,
       ),
     );
-    await service.deleteEntry(created.id, actor);
-    const history = await rejection(service.deleteEntry(205, actor));
+    await service.deleteEntry(created.id, actor, 1);
+    const history = await rejection(service.deleteEntry(205, actor, 1));
     expect(history).toMatchObject({
       statusCode: 409,
       code: 'ENTRY_ALREADY_PURCHASED',
@@ -282,6 +288,7 @@ describe('Shopping business logs and atomic purchases', () => {
       101,
       { purchasedQuantity: 2, newExpiryDate: '2026-10-28' },
       actor,
+      1,
     );
     const snapshot = await entry(101);
     await harness.connection
@@ -299,11 +306,11 @@ describe('Shopping business logs and atomic purchases', () => {
     expect(
       (
         await rejection(
-          service.purchaseEntry(101, { purchasedQuantity: 1 }, actor),
+          service.purchaseEntry(101, { purchasedQuantity: 1 }, actor, 1),
         )
       ).code,
     ).toBe('ALREADY_PURCHASED');
-    expect((await rejection(service.deleteEntry(101, actor))).code).toBe(
+    expect((await rejection(service.deleteEntry(101, actor, 1))).code).toBe(
       'ENTRY_ALREADY_PURCHASED',
     );
     expect(await entry(101)).toEqual(snapshot);
@@ -311,7 +318,7 @@ describe('Shopping business logs and atomic purchases', () => {
 
   it('keeps helpful messages for missing entries and items', async () => {
     const missing = await rejection(
-      service.purchaseEntry(9999, { purchasedQuantity: 1 }, actor),
+      service.purchaseEntry(9999, { purchasedQuantity: 1 }, actor, 1),
     );
     expect(missing).toMatchObject({
       statusCode: 404,
@@ -320,7 +327,7 @@ describe('Shopping business logs and atomic purchases', () => {
     });
     await harness.connection.collection('pantry_items').deleteOne({ id: 1 });
     const orphan = await rejection(
-      service.purchaseEntry(101, { purchasedQuantity: 1 }, actor),
+      service.purchaseEntry(101, { purchasedQuantity: 1 }, actor, 1),
     );
     expect(orphan).toMatchObject({
       statusCode: 404,
@@ -334,6 +341,7 @@ describe('Shopping business logs and atomic purchases', () => {
             107,
             { purchasedQuantity: 1, newExpiryDate: '2026-10-30' },
             actor,
+            1,
           ),
         )
       ).fieldErrors,

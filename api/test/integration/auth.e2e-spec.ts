@@ -35,6 +35,7 @@ describe('Real account authentication', () => {
     expect(Object.keys(result.body).sort()).toEqual([
       'createdAt',
       'email',
+      'householdId',
       'householdRole',
       'id',
       'name',
@@ -42,7 +43,7 @@ describe('Real account authentication', () => {
     expect(result.body).toMatchObject({
       name: 'Molham',
       email: 'test@example.com',
-      householdRole: 'member',
+      householdRole: 'admin',
     });
     const stored = await ctx.connection
       .collection('users')
@@ -52,13 +53,11 @@ describe('Real account authentication', () => {
       await bcrypt.compare(' password with spaces ', stored.passwordHash),
     ).toBe(true);
     expect(
-      await ctx.connection
-        .collection('household_members')
-        .countDocuments({
-          householdId: 1,
-          userId: result.body.id,
-          role: 'member',
-        }),
+      await ctx.connection.collection('household_members').countDocuments({
+        householdId: result.body.householdId,
+        userId: result.body.id,
+        role: 'admin',
+      }),
     ).toBe(1);
     const login = await request(ctx.app.getHttpServer())
       .post('/api/auth/login')

@@ -64,6 +64,7 @@ export async function startAllithApp(suite: string) {
       ...fixture.shoppingPurchased.items,
     ].map(({ pantryStatuses, ...entry }) => ({
       ...entry,
+      householdId: 1,
       normalizedName: entry.name.trim().toLowerCase(),
       createdAt: new Date(entry.createdAt),
       purchasedAt: entry.purchasedAt ? new Date(entry.purchasedAt) : null,

@@ -1,0 +1,14 @@
+{
+  "measuredAt": "2026-10-25T22:19:49.033Z",
+  "result": "PASS",
+  "database": "byb_test_auth_restart",
+  "checks": [
+    "Registration creates an admin in a separate empty household",
+    "Login/use/generate/purchase through HTTP",
+    "Member delete and generate denied; CLI demotion/promotion takes effect with the same JWT",
+    "Owned API and mongod processes both restarted",
+    "Categories, stock, purchase history, users, memberships and ID counters unchanged across restart",
+    "Original JWT authenticates after restart; admin delete preserves purchase snapshot"
+  ],
+  "sharedMongoOn27018": "Not restarted or modified by this script"
+}

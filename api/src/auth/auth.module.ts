@@ -5,6 +5,7 @@ import { DatabaseModule } from '../database/database.module';
 import { UsersModule } from '../users/users.module';
 import { HouseholdMembersModule } from '../household-members/household-members.module';
 import { AuthController } from './auth.controller';
+import { HouseholdController } from './household.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { HouseholdRolesGuard } from './guards/household-roles.guard';
@@ -34,7 +35,7 @@ export function requireJwtSecret(config: ConfigService): string {
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, HouseholdController],
   providers: [AuthService, JwtAuthGuard, HouseholdRolesGuard],
   exports: [
     JwtAuthGuard,

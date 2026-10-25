@@ -4,12 +4,14 @@ import { Request } from 'express';
 import { apiError } from '../../common/errors/api-error';
 import { UsersService } from '../../users/users.service';
 import { RequestUser } from '../request-user.interface';
+import { HouseholdMembersService } from '../../household-members/household-members.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly users: UsersService,
+    private readonly members: HouseholdMembersService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -40,7 +42,18 @@ export class JwtAuthGuard implements CanActivate {
     // Read current identity so a deleted account cannot keep writing until token expiry.
     const user = await this.users.findById(claims.sub);
     if (!user) throw denied();
-    request.user = { sub: user.id, email: user.email };
+    const membership = await this.members.findByUser(user.id);
+    if (
+      !membership ||
+      !Number.isSafeInteger(membership.householdId) ||
+      membership.householdId < 1
+    )
+      throw apiError(403, 'FORBIDDEN', 'You are not a member of a household.');
+    request.user = {
+      sub: user.id,
+      email: user.email,
+      householdId: membership.householdId,
+    };
     return true;
   }
 }

@@ -1,6 +1,6 @@
-# Before You Buy — API contract v2
+# Before You Buy — API contract v3
 
-Owner: Molham. Frontend transport owner: Mohammad. Updated 25 October 2026 after integrating tasks 2. This contract describes the implemented API. V2 adds users/JWT/household-role permissions while preserving the v1 business schemas, dates, statuses and transactions. The shared household remains ID 1; there is no per-user inventory or tenant selector.
+Updated 26 October 2026: independent households, admin-managed family accounts and read-only members supersede the tasks 2 shared-household policy. Business quantities, dates, errors and transactional guarantees remain as specified below. See [migration and verification](../docs/household-access.md).
 
 ## 1. Common conventions
 
@@ -8,26 +8,28 @@ Owner: Molham. Frontend transport owner: Mohammad. Updated 25 October 2026 after
 - Request/response JSON, `Content-Type: application/json`. No extra `data` wrapper beyond the envelopes specified below. DELETE success is 204 with no body.
 - IDs are positive safe integer application IDs. Relations use categoryId/pantryItemId, never MongoDB ObjectId/populate. Never expose `_id`, `__v` or normalizedName in responses.
 - JSON numbers must be finite. Quantities/minimums allow decimals and must be >=0; amounts used/bought/to-buy must be >0. Do not coerce null, booleans, blank strings or numeric strings into valid body numbers.
-- Names/units are trimmed, nonblank strings. Name uniqueness uses trimmed lowercase comparison. Units are text such as litres, kg, pots, tubs, pieces; no new unit-management resource. Category names also use normalized uniqueness.
+- Names/units are trimmed, nonblank strings. Name uniqueness uses trimmed lowercase comparison within each household (categories are a shared global catalog). Units are text such as litres, kg, pots, tubs, pieces; no new unit-management resource. Category names also use normalized uniqueness.
 - Expiry dates are real calendar `YYYY-MM-DD` strings or null, never timestamps. Reject invalid dates such as 2026-02-30. PATCH omission means keep; explicit expiryDate null means clear. Other non-nullable fields cannot be null. Unknown body AND query fields fail 400. Empty PATCH fails 400.
 - Calendar policy: household date in `Asia/Damascus`. Server ClockService computes today's date per operation; compare date-only calendar values consistently, without browser timezone shifts. Date/timestamp display may be localized, but do not parse date-only values as UTC instants for display. UTC timestamps use ISO 8601 with Z.
 - All statuses/reasons/days/counts are computed on backend reads from stored data. Frontend displays them. Mock adapter may simulate them only in explicit development mode.
 - Deterministic status order: LOW STOCK first, then EXPIRED or USE SOON; OK alone. Reasons correspond to status order. A difference in human-readable wording is allowed; meaning must agree.
 - Pantry/category default order is id ascending. Pending entries sort createdAt ascending, then id ascending; Purchased history purchasedAt descending, then id descending. No pagination.
-- Category mutations require only `x-internal-tool-key`; wrong/missing -> 403 `INTERNAL_TOOL_FORBIDDEN`. Never ship this key in the client. Normal writes use JWT and current membership as specified below. Public reads remain unguarded.
+- Category mutations require only `x-internal-tool-key`; wrong/missing -> 403 `INTERNAL_TOOL_FORBIDDEN`. Never ship this key in the client. Normal writes use JWT and current membership as specified below. Only the shared category catalog remains a public domain read.
 
-## V2 authentication and permissions
+## V3 authentication and permissions
 
 | Endpoint | Required access |
 | --- | --- |
-| GET categories, pantry list/detail, shopping list/history, dashboard | Public |
-| POST/PATCH pantry; POST pantry/:id/use | JWT + owner/admin/member |
+| GET categories | Public shared catalog |
+| GET pantry list/detail, shopping list/history, dashboard | JWT + current household membership, scoped to that household |
+| POST/PATCH pantry; POST pantry/:id/use | JWT + owner/admin |
 | DELETE pantry/:id | JWT + owner/admin |
-| POST shopping-list; POST shopping-list/generate; POST shopping-list/:id/purchase | JWT + owner/admin/member |
+| POST shopping-list; POST shopping-list/generate; POST shopping-list/:id/purchase | JWT + owner/admin |
 | DELETE shopping-list/:id | JWT + owner/admin |
 | POST/PATCH/DELETE categories | Internal key only |
 | POST auth/register; POST auth/login; Swagger UI | Public |
 | GET auth/me | JWT + current account and household membership |
+| GET/POST household/members | JWT + owner/admin; list or create members in the current household |
 
 ```ts
 type HouseholdRole = 'owner' | 'admin' | 'member';
@@ -37,6 +39,7 @@ interface SafeUser {
   email: string;
   createdAt: string; // ISO UTC
   householdRole: HouseholdRole;
+  householdId: number;
 }
 interface RegisterInput { name: string; email: string; password: string }
 interface LoginInput { email: string; password: string }
@@ -44,15 +47,15 @@ interface LoginResult { accessToken: string; user: SafeUser }
 ```
 
 - Register: `POST /auth/register` returns 201 SafeUser without signing in. Trim name (1–120 characters) and email (valid email, max 254), lowercase email; never trim passwords. Passwords require at least 8 characters and no more than 72 UTF-8 bytes. Extra fields, arrays and non-object bodies fail validation.
-- User plus household-1 `member` membership and their numeric ID allocations commit atomically. Public registration cannot set a role, ID or household. Email has a database unique index; concurrent duplicates yield one 201 and one 409 `EMAIL_ALREADY_EXISTS`, including `fieldErrors.email`.
+- Public registration creates a new household ID plus an `admin` account/membership atomically. Household 1 is reserved for legacy data. `POST /household/members` accepts the same name/email/password fields and atomically creates a `member` in the verified admin’s household; `GET /household/members` returns `{ items: SafeUser[] }`. Existing emails return 409; this endpoint does not transfer accounts, promote roles or log out the admin. Public registration cannot set a role, ID or household. Email has a database unique index; concurrent duplicates yield one 201 and one 409 `EMAIL_ALREADY_EXISTS`, including `fieldErrors.email`.
 - Login: `POST /auth/login` returns 200 LoginResult. Wrong credentials use a generic 401 `INVALID_CREDENTIALS`. Password hashes and MongoDB internal fields are never returned.
-- JWT: HS256, two-hour expiry, `{ sub: number, email: string }` plus standard claims. Verify signature, expiry and claim types; load the current user before allowing protected writes. Missing/bad/expired/deleted-user tokens return 401 `UNAUTHENTICATED`.
-- Me: `GET /auth/me` returns current SafeUser, including current DB role/email. Missing membership returns 403 `FORBIDDEN`. Roles are read from household membership for each write, never trusted from request data or JWT role claims. Missing role metadata denies access.
-- Only the explicit backend `auth:set-role` command can change an existing account's role. No default owner, public promotion, refresh-token, password-reset or server-logout endpoint is included.
+- JWT: HS256, two-hour expiry, `{ sub: number, email: string }` plus standard claims. Verify signature, expiry and claim types; load the current user and household membership before allowing private reads or writes. Household IDs and roles in JWT claims or client input never choose the data scope. Missing/bad/expired/deleted-user tokens return 401 `UNAUTHENTICATED`.
+- Me: `GET /auth/me` returns current SafeUser, including current DB role/email. Missing membership returns 403 `FORBIDDEN`. Roles and household IDs are read from current membership for each protected request, never trusted from request data or JWT role claims. Missing role metadata denies access.
+- Every newly registered household creator is an admin; family accounts are always members. Only the explicit backend `auth:set-role` command can change an existing account's role. No default owner, public promotion, refresh-token, password-reset or server-logout endpoint is included.
 - Authorized writes still enforce every business restriction below, including Pending deletion blocks and immutable Purchased history. Verified actor IDs go to service logs; callers cannot supply `actorId`.
 - Errors retain `{ statusCode, code, message: string, fieldErrors }`; auth/role errors do not disclose secrets. Domain HTTP success codes are unchanged.
 - The React session stores `byb.accessToken` in sessionStorage and restores through `/auth/me`. Protected 401 invalidates only the session that issued the request, including a revision check for same-token logins; login 401 is a form error. A 403 never logs the user out. Logout clears browser state only, and writes are never automatically retried. Network restoration errors retain a retry path.
-- Public browse routes remain public. `/pantry/new` and `/pantry/:id/edit` require sign-in; `/login` and `/register` use sanitized local `returnTo` navigation. Only owner/admin see delete controls.
+- Dashboard, pantry and shopping routes require sign-in. `/pantry/new`, `/pantry/:id/edit` and `/family` also require admin/owner access. Members see read-only content. `/login` and `/register` use sanitized local `returnTo` navigation. Signing out immediately leaves private pages.
 
 ## 2. Shared types
 

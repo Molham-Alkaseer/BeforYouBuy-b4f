@@ -35,13 +35,12 @@ export default function LoginScreen({ status, onLogin }: LoginScreenProps) {
   return (
     <section className="auth-page">
       <h1>Sign in</h1>
-      <p className="auth-intro">Sign in to add and edit items in your pantry.</p>
+      <p className="auth-intro">Sign in to access your pantry and shopping list.</p>
 
       <LoginForm
         onLogin={onLogin}
         onSuccess={() => navigate(returnTo, { replace: true })}
         registerPath={authPath('/register', returnTo)}
-        browsePath="/pantry"
         initialEmail={initialEmail}
       />
     </section>

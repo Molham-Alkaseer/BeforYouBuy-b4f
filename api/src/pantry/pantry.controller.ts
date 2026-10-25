@@ -47,33 +47,41 @@ export class PantryController {
   constructor(private readonly service: PantryService) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard, HouseholdRolesGuard)
+  @HouseholdRoles('owner', 'admin', 'member')
+  @ApiBearerAuth()
   @ApiOperation({
     summary:
       'List pantry items using combined name, category and current status filters',
   })
   @ApiOkResponse({ type: PantryListResponse })
   findAll(
+    @CurrentUser() user: RequestUser,
     @Query() query: FindPantryQueryDto,
     @Body(new NoFieldsPipe('body')) _body: object,
   ) {
-    return this.service.findAll(query);
+    return this.service.findAll(query, user.householdId);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, HouseholdRolesGuard)
+  @HouseholdRoles('owner', 'admin', 'member')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get an item with current statuses and reasons' })
   @ApiParam({ name: 'id', type: Number })
   @ApiOkResponse({ type: PantryItemResponse })
   findOne(
+    @CurrentUser() user: RequestUser,
     @Param('id', PantryIdPipe) id: string,
     @Query(new NoFieldsPipe('query')) _query: object,
     @Body(new NoFieldsPipe('body')) _body: object,
   ) {
-    return this.service.findOne(Number(id));
+    return this.service.findOne(Number(id), user.householdId);
   }
 
   @Post()
   @UseGuards(JwtAuthGuard, HouseholdRolesGuard)
-  @HouseholdRoles('owner', 'admin', 'member')
+  @HouseholdRoles('owner', 'admin')
   @ApiBearerAuth()
   @ApiResponse({ status: 401, description: 'Sign in required.' })
   @ApiResponse({ status: 403, description: 'Household membership required.' })
@@ -84,12 +92,12 @@ export class PantryController {
     @Body() body: CreatePantryItemDto,
     @Query(new NoFieldsPipe('query')) _query: object,
   ) {
-    return this.service.create(body, user.sub);
+    return this.service.create(body, user.sub, user.householdId);
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, HouseholdRolesGuard)
-  @HouseholdRoles('owner', 'admin', 'member')
+  @HouseholdRoles('owner', 'admin')
   @ApiBearerAuth()
   @ApiResponse({ status: 401, description: 'Sign in required.' })
   @ApiResponse({ status: 403, description: 'Household membership required.' })
@@ -105,12 +113,12 @@ export class PantryController {
     @Body() body: UpdatePantryItemDto,
     @Query(new NoFieldsPipe('query')) _query: object,
   ) {
-    return this.service.update(Number(id), body, user.sub);
+    return this.service.update(Number(id), body, user.sub, user.householdId);
   }
 
   @Post(':id/use')
   @UseGuards(JwtAuthGuard, HouseholdRolesGuard)
-  @HouseholdRoles('owner', 'admin', 'member')
+  @HouseholdRoles('owner', 'admin')
   @ApiBearerAuth()
   @ApiResponse({ status: 401, description: 'Sign in required.' })
   @ApiResponse({ status: 403, description: 'Household membership required.' })
@@ -126,7 +134,12 @@ export class PantryController {
     @Body() body: UsePantryItemDto,
     @Query(new NoFieldsPipe('query')) _query: object,
   ) {
-    return this.service.use(Number(id), body.quantity, user.sub);
+    return this.service.use(
+      Number(id),
+      body.quantity,
+      user.sub,
+      user.householdId,
+    );
   }
 
   @Delete(':id')
@@ -147,6 +160,6 @@ export class PantryController {
     @Query(new NoFieldsPipe('query')) _query: object,
     @Body(new NoFieldsPipe('body')) _body: object,
   ) {
-    return this.service.remove(Number(id), user.sub);
+    return this.service.remove(Number(id), user.sub, user.householdId);
   }
 }

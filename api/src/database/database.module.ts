@@ -10,6 +10,7 @@ import { ClockService } from '../common/clock/clock.service';
 import { IdsService } from './ids.service';
 import { WriteService } from './write.service';
 import { domainModels } from './domain-models';
+import { migrateLegacyHousehold } from './household-migration';
 
 @Module({
   imports: [
@@ -45,5 +46,6 @@ export class DatabaseModule implements OnModuleInit {
     ]) {
       await this.connection.models[name].init();
     }
+    await migrateLegacyHousehold(this.connection);
   }
 }

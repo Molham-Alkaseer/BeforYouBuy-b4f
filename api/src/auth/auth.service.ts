@@ -11,6 +11,7 @@ import { User } from '../users/schemas/user.schema';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { LoginResponseDto, SafeUserDto } from './dto/auth-response.dto';
+import { RequestUser } from './request-user.interface';
 
 @Injectable()
 export class AuthService {
@@ -23,17 +24,48 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
-  private safe(user: User, householdRole: HouseholdRole): SafeUserDto {
+  private safe(
+    user: User,
+    householdRole: HouseholdRole,
+    householdId: number,
+  ): SafeUserDto {
     return {
       id: user.id,
       name: user.name,
       email: user.email,
       createdAt: new Date(user.createdAt).toISOString(),
       householdRole,
+      householdId,
     };
   }
 
   async register(dto: RegisterDto): Promise<SafeUserDto> {
+    return this.createAccount(dto);
+  }
+
+  async addMember(dto: RegisterDto, actor: RequestUser): Promise<SafeUserDto> {
+    return this.createAccount(dto, actor);
+  }
+
+  async listMembers(actor: RequestUser): Promise<{ items: SafeUserDto[] }> {
+    const memberships = await this.members.findHousehold(actor.householdId);
+    const items = await Promise.all(
+      memberships.map(async (membership) => {
+        const user = await this.users.findById(membership.userId);
+        return user
+          ? this.safe(user, membership.role, membership.householdId)
+          : null;
+      }),
+    );
+    return {
+      items: items.filter((item): item is SafeUserDto => item !== null),
+    };
+  }
+
+  private async createAccount(
+    dto: RegisterDto,
+    actor?: RequestUser,
+  ): Promise<SafeUserDto> {
     const duplicate = () =>
       apiError(
         409,
@@ -44,8 +76,26 @@ export class AuthService {
     if (await this.users.findByEmail(dto.email)) throw duplicate();
     const passwordHash = await bcrypt.hash(dto.password, 10);
     let created: User;
+    let householdId: number;
+    const role: HouseholdRole = actor ? 'member' : 'admin';
     try {
       created = await this.writes.run(async (session) => {
+        if (actor) {
+          const membership = await this.members.findByUser(actor.sub, session);
+          if (
+            !membership ||
+            membership.householdId !== actor.householdId ||
+            !['admin', 'owner'].includes(membership.role)
+          ) {
+            throw apiError(
+              403,
+              'FORBIDDEN',
+              'Only a household admin can add members.',
+            );
+          }
+        }
+        householdId =
+          actor?.householdId ?? (await this.ids.next('households', session));
         const id = await this.ids.next('users', session);
         const user = await this.users.create(
           {
@@ -61,6 +111,8 @@ export class AuthService {
           await this.ids.next('household_members', session),
           id,
           session,
+          householdId,
+          role,
         );
         return user;
       });
@@ -73,7 +125,7 @@ export class AuthService {
       throw error;
     }
     this.logger.log(`Registered user: id=${created.id}`);
-    return this.safe(created, 'member');
+    return this.safe(created, role, householdId);
   }
 
   async login(dto: LoginDto): Promise<LoginResponseDto> {
@@ -105,6 +157,6 @@ export class AuthService {
         'FORBIDDEN',
         'You are not a member of this household.',
       );
-    return this.safe(user, membership.role);
+    return this.safe(user, membership.role, membership.householdId);
   }
 }

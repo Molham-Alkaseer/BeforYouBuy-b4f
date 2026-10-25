@@ -241,8 +241,8 @@ describe('Frontend shared client against the live backend', () => {
     mock.setAccessToken(
       (
         await mock.authApi.login({
-          email: 'member@example.com',
-          password: 'member123',
+          email: 'admin@example.com',
+          password: 'admin123',
         })
       ).accessToken,
     );

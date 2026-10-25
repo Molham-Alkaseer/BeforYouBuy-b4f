@@ -78,13 +78,18 @@ async function stopChild(child) {
     startMongo(); await connect(); await startApi();
     const credentials = { email: 'restart@example.com', password: randomBytes(24).toString('hex') };
     const registered = await call('POST', '/auth/register', { ...credentials, name: 'Restart verifier' }, 201);
+    assert.equal(registered.householdRole, 'admin');
+    assert.ok(registered.householdId > 1);
     token = (await call('POST', '/auth/login', credentials)).accessToken;
+    assert.equal((await call('GET', '/pantry')).total, 0);
     const item = await call('POST', '/pantry', { name: 'Restart item', categoryId: 1, quantity: 2, minimumQuantity: 3, unit: 'boxes' }, 201);
     await call('POST', `/pantry/${item.id}/use`, { quantity: 1 });
     await call('POST', '/shopping-list/generate');
     const pending = await call('GET', '/shopping-list?status=Pending&pantryItemId=' + item.id);
     await call('POST', `/shopping-list/${pending.items[0].id}/purchase`, { purchasedQuantity: 4 });
+    execFileSync(process.execPath, ['dist/database/set-household-role.js', credentials.email, 'member'], { cwd: path.resolve(__dirname, '..'), env, windowsHide: true, stdio: 'pipe' });
     await call('DELETE', '/pantry/' + item.id, undefined, 403);
+    await call('POST', '/shopping-list/generate', undefined, 403);
     // Exercise the explicit operator command with the existing registered account.
     execFileSync(process.execPath, ['dist/database/set-household-role.js', credentials.email, 'admin'], { cwd: path.resolve(__dirname, '..'), env, windowsHide: true, stdio: 'pipe' });
     assert.equal((await call('GET', '/auth/me')).householdRole, 'admin');
@@ -105,8 +110,8 @@ async function stopChild(child) {
     assert.equal(history.items[0].purchasedQuantity, 4);
     await call('DELETE', '/pantry/' + item.id, undefined, 204);
     assert.equal((await call('GET', '/shopping-list?status=Purchased&pantryItemId=' + item.id)).items[0].name, 'Restart item');
-    const report = { measuredAt: new Date().toISOString(), result: 'PASS', database, checks: ['Register/login/use/generate/purchase through HTTP', 'Member delete denied; explicit CLI promotion takes effect with the same JWT', 'Owned API and mongod processes both restarted', 'Categories, stock, purchase history, users, memberships and ID counters unchanged across restart', 'Original JWT authenticates after restart; admin delete preserves purchase snapshot'], sharedMongoOn27018: 'Not restarted or modified by this script' };
-    fs.writeFileSync(path.resolve(__dirname, '../../docs/tasks2-restart-evidence.json'), JSON.stringify(report, null, 2) + '\n');
+    const report = { measuredAt: new Date().toISOString(), result: 'PASS', database, checks: ['Registration creates an admin in a separate empty household', 'Login/use/generate/purchase through HTTP', 'Member delete and generate denied; CLI demotion/promotion takes effect with the same JWT', 'Owned API and mongod processes both restarted', 'Categories, stock, purchase history, users, memberships and ID counters unchanged across restart', 'Original JWT authenticates after restart; admin delete preserves purchase snapshot'], sharedMongoOn27018: 'Not restarted or modified by this script' };
+    fs.writeFileSync(path.resolve(__dirname, '../../docs/household-restart-evidence.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(JSON.stringify(report, null, 2));
   } finally {
     await stopChild(api);
