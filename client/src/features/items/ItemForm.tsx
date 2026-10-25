@@ -5,6 +5,8 @@ import ErrorMessage from '../../components/ErrorMessage';
 import LoadingMessage from '../../components/LoadingMessage';
 import { readApiError } from './apiError';
 import { itemApi } from './itemApi';
+import { useItemSession } from './itemSession';
+import type { ItemSession } from './itemSession';
 import type { Category, PantryItem } from './itemTypes';
 import { parseRouteId } from './parseRouteId';
 import RetryError from './RetryError';
@@ -18,8 +20,16 @@ type LoadState =
   | { kind: 'error'; message: string }
   | { kind: 'ready'; categories: Category[]; item: PantryItem | null };
 
-export default function ItemForm() {
+interface ItemFormProps {
+  // Only for trying the screen with a chosen session. Normal pages pass nothing.
+  session?: ItemSession;
+}
+
+export default function ItemForm({ session: sessionOverride }: ItemFormProps) {
   const { id } = useParams();
+  const liveSession = useItemSession();
+  const session = sessionOverride ?? liveSession;
+
   const isEdit = id !== undefined; // /pantry/new has no id, /pantry/:id/edit has one
   const itemId = isEdit ? parseRouteId(id) : null;
   const invalidId = isEdit && itemId === null;
@@ -117,6 +127,7 @@ export default function ItemForm() {
         key={item?.id ?? 'new'}
         categories={categories}
         item={item}
+        session={session}
       />
     </section>
   );

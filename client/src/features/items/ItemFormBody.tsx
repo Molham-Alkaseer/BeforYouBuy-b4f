@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import FormField from './FormField';
 import { readApiError } from './apiError';
 import { itemApi } from './itemApi';
@@ -12,7 +12,13 @@ import {
   valuesFromItem,
 } from './itemFormValues';
 import type { FieldErrors, FieldName, FormValues } from './itemFormValues';
+import { canWriteItems } from './itemSession';
+import type { ItemSession } from './itemSession';
 import type { Category, PantryItem } from './itemTypes';
+import SessionProblem from './SessionProblem';
+import SignInNotice from './SignInNotice';
+import { sessionProblemOf } from './sessionErrors';
+import type { SessionProblemKind } from './sessionErrors';
 import StatusRulesPanel from './StatusRulesPanel';
 
 const UNIT_SUGGESTIONS = [
@@ -29,20 +35,46 @@ const UNIT_SUGGESTIONS = [
 interface ItemFormBodyProps {
   categories: Category[];
   item: PantryItem | null; // null = adding a new item
+  session: ItemSession;
 }
 
-export default function ItemFormBody({ categories, item }: ItemFormBodyProps) {
+interface FormProblem {
+  kind: SessionProblemKind;
+  detail?: string;
+}
+
+export default function ItemFormBody({
+  categories,
+  item,
+  session,
+}: ItemFormBodyProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [values, setValues] = useState<FormValues>(
     item ? valuesFromItem(item) : emptyValues,
   );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [serverMessage, setServerMessage] = useState('');
+  const [problem, setProblem] = useState<FormProblem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const canWrite = canWriteItems(session);
   const noCategories = categories.length === 0;
   const problems = Object.keys(errors).length;
   const cancelTo = item ? `/pantry/${item.id}` : '/pantry';
+
+  // These two refs let a late answer know if the user left or signed out meanwhile.
+  const isMounted = useRef(true);
+  const canWriteRef = useRef(canWrite);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    canWriteRef.current = canWrite;
+  }, [canWrite]);
 
   function handleChange(
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -66,11 +98,12 @@ export default function ItemFormBody({ categories, item }: ItemFormBodyProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (isSubmitting) {
-      return; // a save is already running
+    if (isSubmitting || !canWrite) {
+      return; // a save is already running, or saving is not allowed right now
     }
 
     setServerMessage('');
+    setProblem(null);
 
     const found = validateValues(values);
     setErrors(found);
@@ -91,12 +124,36 @@ export default function ItemFormBody({ categories, item }: ItemFormBodyProps) {
         ? await itemApi.updatePantryItem(item.id, input)
         : await itemApi.createPantryItem(input);
 
+      if (!isMounted.current) {
+        return;
+      }
+
+      // Signed out while the request was running: do not act as if all is fine.
+      if (!canWriteRef.current) {
+        setProblem({
+          kind: 'unauthorized',
+          detail:
+            'Your last change may have been saved. Check the item after you sign in.',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
       navigate(`/pantry/${saved.id}`);
     } catch (error) {
-      // The typed values stay exactly as they were.
+      if (!isMounted.current) {
+        return;
+      }
+      // The typed values stay exactly as they were. We never navigate on failure.
       const apiError = readApiError(error);
-      setErrors(fieldErrorsFromApi(apiError.fieldErrors));
-      setServerMessage(apiError.message);
+      const kind = sessionProblemOf(apiError);
+
+      if (kind) {
+        setProblem({ kind });
+      } else {
+        setErrors(fieldErrorsFromApi(apiError.fieldErrors));
+        setServerMessage(apiError.message);
+      }
       setIsSubmitting(false);
     }
   }
@@ -104,11 +161,40 @@ export default function ItemFormBody({ categories, item }: ItemFormBodyProps) {
   return (
     <div className="item-form-layout">
       <form className="item-form" onSubmit={handleSubmit} noValidate>
+        {!canWrite && session.status === 'checking' && (
+          <p role="status" className="item-session-note">
+            Checking your session...
+          </p>
+        )}
+
+        {!canWrite && session.status === 'anonymous' && (
+          <SignInNotice
+            className="item-session-note"
+            message="Sign in to save changes to items."
+            returnTo={location.pathname}
+          />
+        )}
+
+        {!canWrite && session.status === 'authenticated' && (
+          <p role="status" className="item-session-note">
+            Your account cannot save items.
+          </p>
+        )}
+
         {noCategories && (
           <p role="alert" className="item-error-summary">
             There are no categories yet, so an item cannot be saved. Ask the
             team to add a category first.
           </p>
+        )}
+
+        {problem !== null && (
+          <SessionProblem
+            kind={problem.kind}
+            detail={problem.detail}
+            returnTo={location.pathname}
+            className="item-error-summary"
+          />
         )}
 
         {serverMessage !== '' && (
@@ -231,7 +317,10 @@ export default function ItemFormBody({ categories, item }: ItemFormBodyProps) {
         </FormField>
 
         <div className="item-form-actions">
-          <button type="submit" disabled={noCategories || isSubmitting}>
+          <button
+            type="submit"
+            disabled={noCategories || isSubmitting || !canWrite}
+          >
             {isSubmitting ? 'Saving...' : 'Save item'}
           </button>
           <Link to={cancelTo} className="item-cancel-link">

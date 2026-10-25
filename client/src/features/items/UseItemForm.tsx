@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
+import { useLocation } from 'react-router-dom';
 import { readApiError } from './apiError';
 import { itemApi } from './itemApi';
 import { formatQuantity } from './itemFormat';
 import { parseDecimal } from './itemFormValues';
 import type { PantryItem } from './itemTypes';
+import SessionProblem from './SessionProblem';
+import { sessionProblemOf } from './sessionErrors';
+import type { SessionProblemKind } from './sessionErrors';
 
 interface UseItemFormProps {
   item: PantryItem;
@@ -28,14 +32,26 @@ function readAmount(text: string): { value: number } | { error: string } {
 }
 
 export default function UseItemForm({ item, onUsed }: UseItemFormProps) {
+  const location = useLocation();
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
+  const [problem, setProblem] = useState<SessionProblemKind | null>(null);
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Stops a late answer from changing the screen after the user left it.
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     setAmount(event.target.value);
     setError('');
+    setProblem(null);
     setMessage('');
   }
 
@@ -47,6 +63,7 @@ export default function UseItemForm({ item, onUsed }: UseItemFormProps) {
     }
 
     setMessage('');
+    setProblem(null);
 
     const result = readAmount(amount);
     if ('error' in result) {
@@ -63,22 +80,37 @@ export default function UseItemForm({ item, onUsed }: UseItemFormProps) {
         quantity: result.value,
       });
 
+      if (!isMounted.current) {
+        return;
+      }
       onUsed(updated); // the page now shows the item the server returned
       setAmount('');
       setMessage(
         `Used ${formatQuantity(result.value, updated.unit)} of ${updated.name}.`,
       );
     } catch (caught) {
+      if (!isMounted.current) {
+        return;
+      }
       // The typed amount stays, and the stock shown above does not change.
-      setError(readApiError(caught).message);
+      const apiError = readApiError(caught);
+      const kind = sessionProblemOf(apiError);
+      if (kind) {
+        setProblem(kind);
+      } else {
+        setError(apiError.message);
+      }
     } finally {
-      setIsSubmitting(false);
+      if (isMounted.current) {
+        setIsSubmitting(false);
+      }
     }
   }
 
-  const describedBy = error
-    ? 'item-use-available item-use-error'
-    : 'item-use-available';
+  const describedBy =
+    error !== '' || problem !== null
+      ? 'item-use-available item-use-error'
+      : 'item-use-available';
 
   return (
     <section className="item-use-panel" aria-labelledby="item-use-title">
@@ -110,6 +142,15 @@ export default function UseItemForm({ item, onUsed }: UseItemFormProps) {
           <p id="item-use-error" role="alert" className="item-use-error">
             {error}
           </p>
+        )}
+
+        {problem !== null && (
+          <SessionProblem
+            id="item-use-error"
+            kind={problem}
+            returnTo={location.pathname}
+            className="item-use-error"
+          />
         )}
 
         {message !== '' && (

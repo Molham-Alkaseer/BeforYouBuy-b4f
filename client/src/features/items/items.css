@@ -564,3 +564,23 @@
     grid-row: auto;
   }
 }
+
+/* ---------- Session problems (401 / 403) ---------- */
+
+.item-session-problem a {
+  color: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.item-session-note {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--item-soft);
+}
+
+.item-session-note a {
+  color: var(--item-primary);
+  font-weight: 700;
+}
