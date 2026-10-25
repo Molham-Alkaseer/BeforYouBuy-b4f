@@ -18,6 +18,10 @@ import { PositiveIdPipe } from '../common/pipes/positive-id.pipe';
 import { NoFieldsPipe } from '../common/pipes/no-fields.pipe';
 import { JsonObjectGuard } from '../common/guards/json-object.guard';
 
+// Pre-auth baseline: writes stay as open as before until Molham's AuthModule lands,
+// then each write passes the verified CurrentUser.sub instead.
+const UNAUTHENTICATED_ACTOR = null;
+
 @ApiTags('shopping-list')
 @Controller('shopping-list')
 @UseGuards(JsonObjectGuard)
@@ -47,7 +51,7 @@ export class ShoppingListController {
     @Query(new NoFieldsPipe('query')) _query: object,
     @Body(new NoFieldsPipe('body')) _body: object,
   ) {
-    return this.shoppingListService.generateShoppingList();
+    return this.shoppingListService.generateShoppingList(UNAUTHENTICATED_ACTOR);
   }
 
   @Post()
@@ -56,7 +60,7 @@ export class ShoppingListController {
     @Body() dto: CreateManualEntryDto,
     @Query(new NoFieldsPipe('query')) _query: object,
   ) {
-    return this.shoppingListService.addManualEntry(dto);
+    return this.shoppingListService.addManualEntry(dto, UNAUTHENTICATED_ACTOR);
   }
 
   @Post(':id/purchase')
@@ -74,7 +78,11 @@ export class ShoppingListController {
     @Body() dto: PurchaseEntryDto,
     @Query(new NoFieldsPipe('query')) _query: object,
   ) {
-    return this.shoppingListService.purchaseEntry(id, dto);
+    return this.shoppingListService.purchaseEntry(
+      id,
+      dto,
+      UNAUTHENTICATED_ACTOR,
+    );
   }
 
   @Delete(':id')
@@ -85,6 +93,6 @@ export class ShoppingListController {
     @Query(new NoFieldsPipe('query')) _query: object,
     @Body(new NoFieldsPipe('body')) _body: object,
   ) {
-    return this.shoppingListService.deleteEntry(id);
+    return this.shoppingListService.deleteEntry(id, UNAUTHENTICATED_ACTOR);
   }
 }
