@@ -25,7 +25,7 @@ export class PantryService {
 
   // Temporary compatibility with existing callers until the shared auth foundation
   // supplies CurrentUser. Never infer an actor from a request body or header.
-  private actorContext(actorId?: number): string {
+  private actorContext(actorId: number): string {
     return Number.isSafeInteger(actorId) && actorId > 0
       ? `, actorId=${actorId}`
       : '';
@@ -143,7 +143,7 @@ export class PantryService {
     }
   }
 
-  async create(dto: CreatePantryItemDto, actorId?: number) {
+  async create(dto: CreatePantryItemDto, actorId: number) {
     const today = this.clock.today();
     // Allocation is outside retryable work: failed writes may leave gaps, never reuse IDs.
     const id = await this.ids.next('pantry_items');
@@ -174,7 +174,7 @@ export class PantryService {
     return result;
   }
 
-  async update(id: number, dto: UpdatePantryItemDto, actorId?: number) {
+  async update(id: number, dto: UpdatePantryItemDto, actorId: number) {
     if (!Object.keys(dto).length)
       throw pantryError(
         400,
@@ -220,7 +220,7 @@ export class PantryService {
     return result;
   }
 
-  async use(id: number, quantity: number, actorId?: number) {
+  async use(id: number, quantity: number, actorId: number) {
     if (!Number.isFinite(quantity) || quantity <= 0) {
       throw pantryError(
         400,
@@ -277,7 +277,7 @@ export class PantryService {
     return result;
   }
 
-  async remove(id: number, actorId?: number): Promise<void> {
+  async remove(id: number, actorId: number): Promise<void> {
     await this.writes
       .run(async (session) => {
         const item = await this.getStored(id, session);

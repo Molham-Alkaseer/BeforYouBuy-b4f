@@ -14,8 +14,8 @@ import { CreateManualEntryDto } from './dto/create-manual-entry.dto';
 import { PurchaseEntryDto } from './dto/purchase-entry.dto';
 import { FindShoppingListQueryDto } from './dto/find-shopping-list-query.dto';
 
-/** Verified account ID from the request; null only until the shared AuthModule is wired. */
-export type ActorId = number | null;
+/** Verified account ID supplied by the authenticated controller. */
+export type ActorId = number;
 
 /** Expected business rejections worth a warning; anything else is the global filter's job. */
 const LOGGED_REJECTIONS = new Set([

@@ -1,5 +1,7 @@
 # Rami - add authentication controls to the existing navigation and pages
 
+> Integration status — 25 October 2026: Merged `origin/member-ramy` at `2482c93`. Existing navigation/dashboard/pantry UI was preserved; auth navigation and protected add/edit routes were integrated and checked in the real browser. See [final integration evidence](../docs/tasks2-integration.md). The original assignment below is preserved as a planning record; the integrated engineering status supersedes its unchecked planning boxes. Individual presentations and teammate sign-off are not claimed.
+
 Prepared: 24 October 2026. Read the [shared upgrade contract](molham.md#4-frozen-upgrade-contract) first. This document assigns future implementation work.
 
 ## 1. What we had before

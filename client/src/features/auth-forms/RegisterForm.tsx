@@ -8,7 +8,7 @@ import type { FieldErrors, RegisterValues } from './authTypes';
 import './auth-forms.css';
 
 interface RegisterFormProps {
-  // Sends the data to the server (the real authApi.register is plugged in later).
+  // Uses the shared auth adapter; registration does not create a session.
   onRegister: (input: RegisterValues) => Promise<unknown>;
   // Where the "Sign in" links go. The page decides it, including a safe returnTo.
   loginPath: string;
@@ -167,7 +167,7 @@ export default function RegisterForm({
       <AuthField
         id="register-password"
         label="Password"
-        hint="At least 8 characters."
+        hint="At least 8 characters; at most 72 UTF-8 bytes."
         error={errors.password}
       >
         {(inputProps) => (

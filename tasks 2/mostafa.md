@@ -1,5 +1,7 @@
 # Mostafa - pantry permissions, dashboard stability and backend regression
 
+> Integration status — 25 October 2026: Merged `origin/member-mostafa` at `2053550`. Pantry logging/error changes were retained. Integration completed real JWT/role guard wiring, required verified actor IDs and HTTP permission coverage without guard overrides. See [final integration evidence](../docs/tasks2-integration.md). The original assignment below is preserved as a planning record; the integrated engineering status supersedes its unchecked planning boxes. Individual presentations and teammate sign-off are not claimed.
+
 Prepared: 24 October 2026. You are the existing pantry/dashboard owner named Mustafa in the older Tasks folder. Read the [shared upgrade contract](molham.md#4-frozen-upgrade-contract) first.
 
 ## 1. What we had before

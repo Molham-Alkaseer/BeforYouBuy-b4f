@@ -1,3 +1,4 @@
+import { createAccount, TEST_JWT_SECRET } from '../support/auth-fixtures';
 import { INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
@@ -20,7 +21,9 @@ const fixture = JSON.parse(
 describe('Integrated pantry, shopping, categories and dashboard', () => {
   let app: INestApplication;
   let connection: Connection;
+  let token: string;
   const original = {
+    JWT_SECRET: process.env.JWT_SECRET,
     MONGODB_URI: process.env.MONGODB_URI,
     SEED_ON_START: process.env.SEED_ON_START,
     INTERNAL_TOOL_KEY: process.env.INTERNAL_TOOL_KEY,
@@ -33,6 +36,7 @@ describe('Integrated pantry, shopping, categories and dashboard', () => {
 
   async function start() {
     process.env.MONGODB_URI = `mongodb://127.0.0.1:27018/byb_test_combined_${process.pid}?replicaSet=byb-rs`;
+    process.env.JWT_SECRET = TEST_JWT_SECRET;
     process.env.SEED_ON_START = 'false';
     process.env.INTERNAL_TOOL_KEY = key;
     const { AppModule } = await import('../../src/app.module');
@@ -47,18 +51,23 @@ describe('Integrated pantry, shopping, categories and dashboard', () => {
     app.useGlobalFilters(new AllExceptionsFilter());
     await app.init();
     connection = app.get(getConnectionToken());
+    token = (await createAccount(app, 'admin')).token;
   }
   const get = (path: string) => request(app.getHttpServer()).get('/api' + path);
   const post = (path: string, body?: object) =>
     request(app.getHttpServer())
       .post('/api' + path)
+      .set('Authorization', 'Bearer ' + token)
       .send(body);
   const patch = (path: string, body: object) =>
     request(app.getHttpServer())
       .patch('/api' + path)
+      .set('Authorization', 'Bearer ' + token)
       .send(body);
   const remove = (path: string) =>
-    request(app.getHttpServer()).delete('/api' + path);
+    request(app.getHttpServer())
+      .delete('/api' + path)
+      .set('Authorization', 'Bearer ' + token);
 
   beforeAll(start);
   beforeEach(async () => {
@@ -197,7 +206,7 @@ describe('Integrated pantry, shopping, categories and dashboard', () => {
     });
   });
 
-  it('PDF 17.6: protects only category mutations and documents their Swagger header', async () => {
+  it('PDF 17.6: keeps category mutations key-only and documents their Swagger header', async () => {
     await post('/categories', { name: 'Baking' }).expect(403);
     const created = await post('/categories', { name: 'Baking' })
       .set('x-internal-tool-key', key)

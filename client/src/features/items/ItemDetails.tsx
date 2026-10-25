@@ -196,7 +196,7 @@ export default function ItemDetails({ session: sessionOverride }: ItemDetailsPro
 
       {canWrite ? (
         <UseItemForm
-          key={item.id}
+          key={`use-${item.id}`}
           item={item}
           onUsed={(updated) =>
             setState((current) =>
@@ -227,7 +227,7 @@ export default function ItemDetails({ session: sessionOverride }: ItemDetailsPro
         </section>
       )}
 
-      <ItemHistory key={item.id} itemId={item.id} itemName={item.name} />
+      <ItemHistory key={`history-${item.id}`} itemId={item.id} itemName={item.name} />
     </section>
   );
 }

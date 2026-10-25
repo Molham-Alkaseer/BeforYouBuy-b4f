@@ -20,6 +20,7 @@ export default function RegisterScreen({
   if (status === 'authenticated') {
     return <Navigate to={returnTo} replace />;
   }
+  if (status === 'checking') return <p role="status">Checking your session...</p>;
 
   return (
     <section className="auth-page">

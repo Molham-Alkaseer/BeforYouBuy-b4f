@@ -158,10 +158,12 @@ export interface SafeUser {
   id: number;
   email: string;
   name: string;
-  role: HouseholdRole;
+  createdAt: Timestamp;
+  householdRole: HouseholdRole;
 }
 
 export interface RegisterInput {
+  name: string;
   email: string;
   password: string;
 }
@@ -172,7 +174,7 @@ export interface LoginInput {
 }
 
 export interface LoginResult {
-  token: string;
+  accessToken: string;
   user: SafeUser;
 }
 

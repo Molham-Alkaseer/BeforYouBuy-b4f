@@ -1,11 +1,7 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
+import { apiError } from '../errors/api-error';
 
 @Injectable()
 export class InternalToolGuard implements CanActivate {
@@ -17,7 +13,9 @@ export class InternalToolGuard implements CanActivate {
     const expectedKey = this.config.get<string>('INTERNAL_TOOL_KEY');
 
     if (!providedKey || providedKey !== expectedKey) {
-      throw new ForbiddenException(
+      throw apiError(
+        403,
+        'INTERNAL_TOOL_FORBIDDEN',
         "This operation is restricted to Before You Buy's own internal tooling.",
       );
     }

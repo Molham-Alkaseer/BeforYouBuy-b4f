@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../services/api-client";
 import { useAuth } from "../features/session/useAuth";
 import { readApiError } from "../features/items/apiError";
@@ -7,10 +8,17 @@ import "./shopping-list.css";
 
 export default function ShoppingListPage() {
   const { status, user } = useAuth();
+  // Dispose pending form state when the signed-in identity or role changes.
+  return <ShoppingListSession key={`${status}:${user?.id}:${user?.householdRole}`} />;
+}
+
+function ShoppingListSession() {
+  const navigate = useNavigate();
+  const { status, user } = useAuth();
   const isAuthenticated = status === "authenticated";
   const isAdminOrOwner =
     isAuthenticated &&
-    (user?.role === "admin" || user?.role === "owner");
+    (user?.householdRole === "admin" || user?.householdRole === "owner");
 
   const [pendingData, setPendingData] = useState<ShoppingList | null>(null);
   const [purchasedData, setPurchasedData] = useState<ShoppingList | null>(null);
@@ -34,6 +42,10 @@ export default function ShoppingListPage() {
     Record<string, string[]>
   >({});
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const purchaseInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (purchasingItem) purchaseInput.current?.focus();
+  }, [purchasingItem]);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
@@ -73,9 +85,7 @@ export default function ShoppingListPage() {
     deletingId !== null;
 
   const requireSignIn = () => {
-    setAuthMessage(
-      "Please sign in to generate, add, or purchase shopping entries.",
-    );
+    navigate('/login?returnTo=%2Fshopping-list');
   };
 
   const handleGenerate = async () => {
@@ -261,15 +271,9 @@ export default function ShoppingListPage() {
     return (
       <div className="shopping-error">
         <p style={{ marginBottom: "1rem" }}>Error: {error}</p>
-        {isAuthenticated ? (
           <button onClick={loadData} className="shopping-btn-primary">
             Retry
           </button>
-        ) : (
-          <button onClick={requireSignIn} className="shopping-btn-primary">
-            Sign in
-          </button>
-        )}
       </div>
     );
   }
@@ -386,7 +390,7 @@ export default function ShoppingListPage() {
               <div className="shopping-item-actions">
                 <button
                   onClick={() => openPurchasePanel(item)}
-                  disabled={isAnyActionRunning || !isAuthenticated}
+                  disabled={isAnyActionRunning}
                   className="shopping-btn-primary shopping-btn-small"
                 >
                   {isAuthenticated ? "Mark purchased" : "Sign in to purchase"}
@@ -463,7 +467,7 @@ export default function ShoppingListPage() {
           )}
         </section>
 
-        {purchasingItem && (
+        {isAuthenticated && purchasingItem && (
           <section className="shopping-purchase-panel">
             <h2 className="shopping-panel-title">
               Mark {purchasingItem.name} as purchased
@@ -486,6 +490,7 @@ export default function ShoppingListPage() {
                   <label htmlFor="purchaseQty">Quantity bought</label>
                   <input
                     id="purchaseQty"
+                    ref={purchaseInput}
                     type="number"
                     min="0"
                     step="any"

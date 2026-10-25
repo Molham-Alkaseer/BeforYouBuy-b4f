@@ -1,5 +1,21 @@
 # Molham - team leader, backend authentication, permissions and integration
 
+## Engineering closure — 25 October 2026
+
+The upgrade is implemented and all five remote member tips are integrated on the user's existing `member-molham` branch. The original plan below remains historical; its proposed `codex/tasks2-*` branches and chronological checkpoints were superseded by the user's request to integrate the actual `member-*` branches. No teammate commits were rewritten.
+
+- [x] Preserve `d7847e1` as local recovery branch `codex/pre-tasks2-integration-20261025`; save a verified private snapshot of the development database before running the upgraded app against it. The backup was taken after code editing began, not retroactively before implementation.
+- [x] Publish API contract v2 while retaining all pantry/shopping rules and schemas.
+- [x] Implement users, bcrypt, normalized-email uniqueness, atomic registration/membership/counters, JWT login/me, safe responses and explicit role promotion CLI.
+- [x] Wire shared verified-identity and current-membership guards into every protected pantry/shopping route; keep public reads and key-only category tooling.
+- [x] Integrate all five members and resolve frontend wire-type, auth bridge, restoration, expiry, race, mock-permission and React-key defects.
+- [x] Retain the original 100 regression cases; add logging/auth/permissions/session coverage. Final full run: 177/177 tests across 11 suites; API/client builds and frontend lint pass.
+- [x] Verify real register -> login -> add -> use -> generate -> purchase -> history -> reload -> logout; check member/admin UI controls, keyboard activation/focus and mobile/desktop layouts.
+- [x] Verify actual API and isolated MongoDB process restarts without stopping the shared instance; stock, history, users, memberships and counters survive unchanged.
+- [x] Update README, test README, frontend API guide and [integration report](../docs/tasks2-integration.md), including known dependency advisories and the human handoff below.
+
+Human handoff: each member still owns their English presentation and personal sign-off. A team meeting, individual demos and a complete accessibility audit were not performed by this integration. These are not represented as completed technical tests. Suggested presentation order: Molham auth/permissions -> Rami navigation -> Maya item flow -> Mohammad transport/shopping UI -> Mostafa pantry/dashboard -> Allith purchase transactions/logs.
+
 Prepared: 24 October 2026. Assignment plan only; the upgrades below are not implemented by creating these documents.
 
 ## 1. What this round means

@@ -1,3 +1,4 @@
+import { TEST_JWT_SECRET } from '../support/auth-fixtures';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getConnectionToken } from '@nestjs/mongoose';
@@ -10,12 +11,14 @@ describe('Full application bootstrap', () => {
   let app: INestApplication;
   let connection: Connection;
   const original = {
+    JWT_SECRET: process.env.JWT_SECRET,
     MONGODB_URI: process.env.MONGODB_URI,
     SEED_ON_START: process.env.SEED_ON_START,
   };
 
   beforeAll(async () => {
     process.env.MONGODB_URI = `mongodb://127.0.0.1:27018/byb_test_bootstrap_${process.pid}?replicaSet=byb-rs`;
+    process.env.JWT_SECRET = TEST_JWT_SECRET;
     process.env.SEED_ON_START = 'true';
     const { AppModule } = await import('../../src/app.module');
     const module = await Test.createTestingModule({

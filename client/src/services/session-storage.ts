@@ -1,47 +1,33 @@
-const TOKEN_KEY = "byb.accessToken";
-
+const TOKEN_KEY = 'byb.accessToken';
 export interface SessionStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
 }
-
-const browserStorage: SessionStorage = {
-  getItem(key: string): string | null {
-    return typeof sessionStorage !== "undefined"
-      ? sessionStorage.getItem(key)
-      : null;
-  },
-  setItem(key: string, value: string): void {
-    if (typeof sessionStorage !== "undefined") {
-      sessionStorage.setItem(key, value);
-    }
-  },
-  removeItem(key: string): void {
-    if (typeof sessionStorage !== "undefined") {
-      sessionStorage.removeItem(key);
-    }
-  },
+const memory = new Map<string, string>();
+const fallbackStorage: SessionStorage = {
+  getItem: key => memory.get(key) ?? null,
+  setItem: (key, value) => { memory.set(key, value); },
+  removeItem: key => { memory.delete(key); },
 };
-
-let currentStorage: SessionStorage = browserStorage;
-
-export function setSessionStorage(storage: SessionStorage): void {
-  currentStorage = storage;
+function browserStorage(): SessionStorage {
+  try { return typeof sessionStorage === 'undefined' ? fallbackStorage : sessionStorage; }
+  catch { return fallbackStorage; }
 }
-
-export function getAccessToken(): string | null {
-  return currentStorage.getItem(TOKEN_KEY);
+let storage = browserStorage();
+let revision = 0;
+const listeners = new Set<() => void>();
+export function subscribeToken(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
 }
-
-export function setAccessToken(token: string): void {
-  currentStorage.setItem(TOKEN_KEY, token);
+function changed() { revision++; listeners.forEach(listener => listener()); }
+export function setSessionStorage(value: SessionStorage): void { storage = value; changed(); }
+export function getAccessToken(): string | null { return storage.getItem(TOKEN_KEY); }
+export function getTokenRevision(): number { return revision; }
+export function setAccessToken(token: string): void { storage.setItem(TOKEN_KEY, token); changed(); }
+export function clearAccessToken(): void { storage.removeItem(TOKEN_KEY); changed(); }
+export function invalidateAccessToken(token: string | null, requestRevision: number): void {
+  if (token && token === getAccessToken() && requestRevision === revision) clearAccessToken();
 }
-
-export function clearAccessToken(): void {
-  currentStorage.removeItem(TOKEN_KEY);
-}
-
-export function hasToken(): boolean {
-  return getAccessToken() !== null;
-}
+export function hasToken(): boolean { return getAccessToken() !== null; }

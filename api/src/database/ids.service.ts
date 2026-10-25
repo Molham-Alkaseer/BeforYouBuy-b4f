@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { ClientSession, Connection } from 'mongoose';
 
-export type IdCollection = 'categories' | 'pantry_items' | 'shopping_entries';
+export type IdCollection =
+  | 'categories'
+  | 'pantry_items'
+  | 'shopping_entries'
+  | 'users'
+  | 'household_members';
 
 @Injectable()
 export class IdsService {

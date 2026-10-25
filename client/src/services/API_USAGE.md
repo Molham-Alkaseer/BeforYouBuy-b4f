@@ -37,10 +37,15 @@ The `authApi` export provides register, login, and me endpoints. It shares the s
 import { authApi } from "../services/api-client";
 
 // Register (does not sign in automatically)
-const user = await authApi.register({ email: "a@b.com", password: "secret123" });
+const registeredUser = await authApi.register({ name: "Demo", email: "a@b.com", password: "secret123" });
 
-// Login (returns token + user, saves session)
-const { token, user } = await authApi.login({ email: "a@b.com", password: "secret123" });
+// Transport only: returns accessToken + user; it does not mutate session state.
+const { accessToken, user } = await authApi.login({ email: "a@b.com", password: "secret123" });
+
+// In app code use useAuth().login(input), or the shared non-React login action,
+// which awaits authApi.login, stores accessToken, and publishes SafeUser:
+import { login } from "../features/session/session-store";
+await login({ email: "a@b.com", password: "secret123" });
 
 // Get current user (requires valid session)
 const currentUser = await authApi.me();
@@ -58,17 +63,17 @@ function MyComponent() {
 
   // status: "checking" | "anonymous" | "authenticated"
   if (status === "checking") return <div>Loading session...</div>;
-  if (status === "anonymous") return <button onClick={() => login({ email, password })}>Sign in</button>;
+  if (status === "anonymous" || !user) return <a href="/login">Sign in</a>;
 
-  return <div>Welcome, {user.name} ({user.role})</div>;
+  return <div>Welcome, {user.name} ({user.householdRole})</div>;
 }
 ```
 
 `useAuth()` returns `{ status, user, login, logout }`:
 - `status` — `"checking" | "anonymous" | "authenticated"`
-- `user` — `SafeUser | null` (id, email, name, role)
-- `login(input)` — calls `/auth/login`, saves token, sets authenticated status
-- `logout()` — clears token and session, sets anonymous status
+- `user` — `SafeUser | null` (id, email, name, createdAt, householdRole)
+- `login(input): Promise<void>` — calls `/auth/login`, saves accessToken, sets authenticated status
+- `logout()` — clears token and session, sets anonymous status; issued JWTs remain valid until expiry
 
 ## 4. Environment / Mode Behavior
 
@@ -87,6 +92,7 @@ function MyComponent() {
 - On reload with a token: status is `"checking"`, then `/auth/me` is called.
   - Success → `"authenticated"` with user.
   - 401/expired → `"anonymous"` with a usable sign-in path.
+  - Network/500 → anonymous controls with a visible retry option; token retained for retry.
 - Without a token: starts `"anonymous"`.
 - Bearer `Authorization` header is added centrally to all protected requests.
 - Register and login do **not** send a bearer token.
@@ -96,7 +102,7 @@ function MyComponent() {
 
 | Status | Meaning | Behavior |
 |--------|---------|----------|
-| 401 | Unauthenticated / session expired | Invalidate only if the token used is still current; offer sign-in; keep public lists visible |
+| 401 | Unauthenticated / session expired | Protected requests invalidate only the matching token AND session revision; stale responses cannot clear a newer login. Login 401 stays a form error. |
 | 403 | Insufficient permission | Show permission feedback; retain session; no logout |
 
 - Network / 500 failures never silently switch transports or report an incorrect password.
@@ -115,6 +121,7 @@ Mock accounts (development fixtures only):
 - Registration normalizes email, creates a member account; role/ID input is not accepted.
 - Mock login/me/session expiration reproduce contract success and 400/401/403/409 outcomes.
 - Mock tokens are simulated development values, not a production JWT verifier.
+- Accounts and inventory are in memory; registration and inventory edits reset on reload. Fixed demo accounts can restore their mock token for up to two hours. Mock dates use 16 October 2026. Real backend dates use the current household day.
 - Reads are public. Mutations enforce session/role policy:
   - Member delete → 403
   - Admin/owner valid delete → 204

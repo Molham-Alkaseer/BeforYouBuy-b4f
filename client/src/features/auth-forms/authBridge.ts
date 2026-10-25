@@ -1,66 +1,14 @@
-import { createApiError } from '../items/apiError';
-
-// TEMPORARY bridge. Everything that must come from the shared session files
-// (useAuth, authApi, sanitizeReturnTo) is gathered here, so connecting the
-// real ones later means editing only this file.
-
-export type AuthStatus = 'checking' | 'anonymous' | 'authenticated';
-
+import { useAuth } from '../session/useAuth';
+import { login } from '../session/session-store';
+import { authApi } from '../../services/auth-api';
+export { sanitizeReturnTo } from '../navigation/returnTo';
+export type { AuthStatus } from '../session/session-store';
+export type { HouseholdRole as AuthRole } from '../../types';
 export const FALLBACK_RETURN_TO = '/pantry';
-
-// TODO: replace with Rami's sanitizeReturnTo from features/navigation/returnTo.ts.
-// Only paths inside this app are allowed, and never the auth pages themselves.
-export function sanitizeReturnTo(value: string | null): string {
-  if (
-    value === null ||
-    !value.startsWith('/') ||
-    value.startsWith('//') ||
-    value.includes('\\') ||
-    Array.from(value).some((character) => character.charCodeAt(0) < 32) ||
-    value === '/login' ||
-    value.startsWith('/login?') ||
-    value === '/register' ||
-    value.startsWith('/register?')
-  ) {
-    return FALLBACK_RETURN_TO;
-  }
-  return value;
-}
-
-// Builds /login or /register and keeps a safe returnTo in the address.
 export function authPath(base: '/login' | '/register', returnTo: string): string {
-  return returnTo === FALLBACK_RETURN_TO
-    ? base
-    : `${base}?returnTo=${encodeURIComponent(returnTo)}`;
+  return returnTo === FALLBACK_RETURN_TO ? base : base + '?returnTo=' + encodeURIComponent(returnTo);
 }
-
-function notConnected(): never {
-  throw createApiError({
-    statusCode: 0,
-    code: 'AUTH_NOT_CONNECTED',
-    message: 'Sign-in is not connected to the server yet.',
-    fieldErrors: {},
-  });
-}
-
-// TODO: replace with useAuth().status.
-export function useAuthStatus(): AuthStatus {
-  return 'anonymous';
-}
-
-// TODO: replace with useAuth().login(input).
-export async function loginAction(): Promise<void> {
-  notConnected();
-}
-
-// TODO: replace with authApi.register(input) from services/api-client.ts.
-export async function registerAction(): Promise<unknown> {
-  notConnected();
-}
-
-export type AuthRole = 'member' | 'admin' | 'owner';
-
-// TODO: replace with the role of the user from useAuth().
-export function useAuthRole(): AuthRole | null {
-  return null;
-}
+export function useAuthStatus() { return useAuth().status; }
+export function useAuthRole() { return useAuth().user?.householdRole ?? null; }
+export const loginAction = login;
+export const registerAction = authApi.register;

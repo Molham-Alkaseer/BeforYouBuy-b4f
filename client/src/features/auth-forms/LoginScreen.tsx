@@ -30,17 +30,12 @@ export default function LoginScreen({ status, onLogin }: LoginScreenProps) {
   if (status === 'authenticated') {
     return <Navigate to={returnTo} replace />;
   }
+  if (status === 'checking') return <p role="status">Checking your session...</p>;
 
   return (
     <section className="auth-page">
       <h1>Sign in</h1>
       <p className="auth-intro">Sign in to add and edit items in your pantry.</p>
-
-      {status === 'checking' && (
-        <p role="status" className="auth-intro">
-          Checking your session...
-        </p>
-      )}
 
       <LoginForm
         onLogin={onLogin}

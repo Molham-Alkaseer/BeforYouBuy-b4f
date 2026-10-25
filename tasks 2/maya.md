@@ -1,5 +1,7 @@
 # Maya - login/register screens and item workflows
 
+> Integration status — 25 October 2026: Merged `origin/member-maya` at `db97d63`. Login/register and item forms/details/history are connected to the shared live auth adapter. Integration fixed the disconnected bridge, session-checking forms and duplicate sibling React keys. See [final integration evidence](../docs/tasks2-integration.md). The original assignment below is preserved as a planning record; the integrated engineering status supersedes its unchecked planning boxes. Individual presentations and teammate sign-off are not claimed.
+
 Prepared: 24 October 2026. Read the [shared upgrade contract](molham.md#4-frozen-upgrade-contract) first. This is an implementation assignment, not a report that the upgrade already exists.
 
 ## 1. What we had before

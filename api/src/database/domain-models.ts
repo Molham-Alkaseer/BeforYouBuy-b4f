@@ -1,4 +1,9 @@
 import { ModelDefinition } from '@nestjs/mongoose';
+import { User, UserSchema } from '../users/schemas/user.schema';
+import {
+  HouseholdMember,
+  HouseholdMemberSchema,
+} from '../household-members/schemas/household-member.schema';
 import {
   PantryItem,
   PantryItemSchema,
@@ -9,6 +14,12 @@ import {
 } from '../shopping-list/schemas/shopping-entry.schema';
 
 export const domainModels: ModelDefinition[] = [
+  { name: User.name, schema: UserSchema, collection: 'users' },
+  {
+    name: HouseholdMember.name,
+    schema: HouseholdMemberSchema,
+    collection: 'household_members',
+  },
   {
     name: PantryItem.name,
     schema: PantryItemSchema,

@@ -1,6 +1,6 @@
-# Before You Buy — API contract v1
+# Before You Buy — API contract v2
 
-Owner: Molham. Frontend transport owner: Mohammad. This is the implementation agreement for all six members, not documentation of already-working endpoints. Use it instead of guessing from the starter types or screenshots. No account/login system.
+Owner: Molham. Frontend transport owner: Mohammad. Updated 25 October 2026 after integrating tasks 2. This contract describes the implemented API. V2 adds users/JWT/household-role permissions while preserving the v1 business schemas, dates, statuses and transactions. The shared household remains ID 1; there is no per-user inventory or tenant selector.
 
 ## 1. Common conventions
 
@@ -14,7 +14,45 @@ Owner: Molham. Frontend transport owner: Mohammad. This is the implementation ag
 - All statuses/reasons/days/counts are computed on backend reads from stored data. Frontend displays them. Mock adapter may simulate them only in explicit development mode.
 - Deterministic status order: LOW STOCK first, then EXPIRED or USE SOON; OK alone. Reasons correspond to status order. A difference in human-readable wording is allowed; meaning must agree.
 - Pantry/category default order is id ascending. Pending entries sort createdAt ascending, then id ascending; Purchased history purchasedAt descending, then id descending. No pagination.
-- Only category mutations require `x-internal-tool-key`; wrong/missing -> 403. Never ship this key in the client. Normal household endpoints have no guard.
+- Category mutations require only `x-internal-tool-key`; wrong/missing -> 403 `INTERNAL_TOOL_FORBIDDEN`. Never ship this key in the client. Normal writes use JWT and current membership as specified below. Public reads remain unguarded.
+
+## V2 authentication and permissions
+
+| Endpoint | Required access |
+| --- | --- |
+| GET categories, pantry list/detail, shopping list/history, dashboard | Public |
+| POST/PATCH pantry; POST pantry/:id/use | JWT + owner/admin/member |
+| DELETE pantry/:id | JWT + owner/admin |
+| POST shopping-list; POST shopping-list/generate; POST shopping-list/:id/purchase | JWT + owner/admin/member |
+| DELETE shopping-list/:id | JWT + owner/admin |
+| POST/PATCH/DELETE categories | Internal key only |
+| POST auth/register; POST auth/login; Swagger UI | Public |
+| GET auth/me | JWT + current account and household membership |
+
+```ts
+type HouseholdRole = 'owner' | 'admin' | 'member';
+interface SafeUser {
+  id: number;
+  name: string;
+  email: string;
+  createdAt: string; // ISO UTC
+  householdRole: HouseholdRole;
+}
+interface RegisterInput { name: string; email: string; password: string }
+interface LoginInput { email: string; password: string }
+interface LoginResult { accessToken: string; user: SafeUser }
+```
+
+- Register: `POST /auth/register` returns 201 SafeUser without signing in. Trim name (1–120 characters) and email (valid email, max 254), lowercase email; never trim passwords. Passwords require at least 8 characters and no more than 72 UTF-8 bytes. Extra fields, arrays and non-object bodies fail validation.
+- User plus household-1 `member` membership and their numeric ID allocations commit atomically. Public registration cannot set a role, ID or household. Email has a database unique index; concurrent duplicates yield one 201 and one 409 `EMAIL_ALREADY_EXISTS`, including `fieldErrors.email`.
+- Login: `POST /auth/login` returns 200 LoginResult. Wrong credentials use a generic 401 `INVALID_CREDENTIALS`. Password hashes and MongoDB internal fields are never returned.
+- JWT: HS256, two-hour expiry, `{ sub: number, email: string }` plus standard claims. Verify signature, expiry and claim types; load the current user before allowing protected writes. Missing/bad/expired/deleted-user tokens return 401 `UNAUTHENTICATED`.
+- Me: `GET /auth/me` returns current SafeUser, including current DB role/email. Missing membership returns 403 `FORBIDDEN`. Roles are read from household membership for each write, never trusted from request data or JWT role claims. Missing role metadata denies access.
+- Only the explicit backend `auth:set-role` command can change an existing account's role. No default owner, public promotion, refresh-token, password-reset or server-logout endpoint is included.
+- Authorized writes still enforce every business restriction below, including Pending deletion blocks and immutable Purchased history. Verified actor IDs go to service logs; callers cannot supply `actorId`.
+- Errors retain `{ statusCode, code, message: string, fieldErrors }`; auth/role errors do not disclose secrets. Domain HTTP success codes are unchanged.
+- The React session stores `byb.accessToken` in sessionStorage and restores through `/auth/me`. Protected 401 invalidates only the session that issued the request, including a revision check for same-token logins; login 401 is a form error. A 403 never logs the user out. Logout clears browser state only, and writes are never automatically retried. Network restoration errors retain a retry path.
+- Public browse routes remain public. `/pantry/new` and `/pantry/:id/edit` require sign-in; `/login` and `/register` use sanitized local `returnTo` navigation. Only owner/admin see delete controls.
 
 ## 2. Shared types
 
@@ -796,7 +834,7 @@ Category examples: POST `/categories` with `{ "name":"Baking" }` and valid heade
 
 Each backend owner can test immediately with the providers below. The exact DatabaseModule/provider implementation belongs to Molham; domain logic must not wait for another domain service.
 
-- Mongoose model tokens/classes: `Category`, `PantryItem`, `ShoppingEntry`. Explicit collection names: `categories`, `pantry_items`, `shopping_entries`.
+- Mongoose model tokens/classes: `Category`, `PantryItem`, `ShoppingEntry`, `User`, `HouseholdMember`. Explicit collection names: `categories`, `pantry_items`, `shopping_entries`, `users`, `household_members`.
 - Schema exports: CategorySchema (Molham), PantryItemSchema (Mustafa), ShoppingEntrySchema (Allaith), from existing resource schema paths. Molham registers them once in `api/src/database/database.module.ts` and exports MongooseModule. Domain modules import DatabaseModule only; it must not import their modules/services.
 - Stored Category fields: id/name/normalizedName. Stored PantryItem: id/name/normalizedName/categoryId/quantity/unit/minimumQuantity/expiryDate. Stored ShoppingEntry: all ShoppingEntry fields except pantryStatuses, plus normalizedName. Timestamps may be BSON Dates internally but serialize as ISO strings. Date-only expiry fields stay date-only/null.
 - Correctness constraints: unique numeric IDs, unique normalized pantry/category names, at most one Pending per linked pantryItemId, unique normalized Pending names. Do not use a plain unique index on nullable pantryItemId that blocks multiple manual/history records; scope the constraint to Pending linked records. History uniqueness rules differ from Pending rules.
