@@ -39,7 +39,14 @@ export class PantryHttpFilter implements ExceptionFilter {
       .status(statusCode)
       .json({
         statusCode,
-        code: statusCode === 400 ? 'VALIDATION_ERROR' : 'HTTP_ERROR',
+        code:
+          (
+            {
+              400: 'VALIDATION_ERROR',
+              401: 'UNAUTHENTICATED',
+              403: 'FORBIDDEN',
+            } as Record<number, string>
+          )[statusCode] ?? 'HTTP_ERROR',
         message: Array.isArray(message)
           ? 'Request validation failed.'
           : (message ?? error.message),
