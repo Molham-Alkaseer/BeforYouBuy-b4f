@@ -1,4 +1,4 @@
-import { request } from '../api';
+import { request, getAuthHeaders } from '../api';
 import {
   ApiClient,
   CategoryList,
@@ -15,6 +15,16 @@ import {
   ShoppingList,
   ShoppingQuery,
 } from '../types';
+
+function authInit(options?: RequestInit): RequestInit {
+  return {
+    ...options,
+    headers: {
+      ...getAuthHeaders(),
+      ...(options?.headers ?? {}),
+    },
+  };
+}
 
 
 function buildQueryString(params?: Record<string, unknown>): string {
@@ -38,77 +48,77 @@ function buildQueryString(params?: Record<string, unknown>): string {
 
 export const httpApi: ApiClient = {
   listCategories(): Promise<CategoryList> {
-    return request<CategoryList>('/categories');
+    return request<CategoryList>('/categories', authInit());
   },
 
   listPantry(query?: PantryQuery): Promise<PantryList> {
     const qs = buildQueryString(query as Record<string, unknown>);
-    return request<PantryList>(`/pantry${qs}`);
+    return request<PantryList>(`/pantry${qs}`, authInit());
   },
 
   getPantryItem(id: number): Promise<PantryItem> {
-    return request<PantryItem>(`/pantry/${encodeURIComponent(id)}`);
+    return request<PantryItem>(`/pantry/${encodeURIComponent(id)}`, authInit());
   },
 
   createPantryItem(input: PantryInput): Promise<PantryItem> {
-    return request<PantryItem>('/pantry', {
+    return request<PantryItem>('/pantry', authInit({
       method: 'POST',
       body: JSON.stringify(input),
-    });
+    }));
   },
 
   updatePantryItem(id: number, input: PantryUpdate): Promise<PantryItem> {
-    return request<PantryItem>(`/pantry/${encodeURIComponent(id)}`, {
+    return request<PantryItem>(`/pantry/${encodeURIComponent(id)}`, authInit({
       method: 'PATCH',
       body: JSON.stringify(input),
-    });
+    }));
   },
 
   usePantryItem(id: number, input: { quantity: number }): Promise<PantryItem> {
-    return request<PantryItem>(`/pantry/${encodeURIComponent(id)}/use`, {
+    return request<PantryItem>(`/pantry/${encodeURIComponent(id)}/use`, authInit({
       method: 'POST',
       body: JSON.stringify(input),
-    });
+    }));
   },
 
   deletePantryItem(id: number): Promise<void> {
-    return request<void>(`/pantry/${encodeURIComponent(id)}`, {
+    return request<void>(`/pantry/${encodeURIComponent(id)}`, authInit({
       method: 'DELETE',
-    });
+    }));
   },
 
   getDashboard(): Promise<Dashboard> {
-    return request<Dashboard>('/dashboard');
+    return request<Dashboard>('/dashboard', authInit());
   },
 
   listShoppingEntries(query?: ShoppingQuery): Promise<ShoppingList> {
     const qs = buildQueryString(query as Record<string, unknown>);
-    return request<ShoppingList>(`/shopping-list${qs}`);
+    return request<ShoppingList>(`/shopping-list${qs}`, authInit());
   },
 
   generateShoppingList(): Promise<GenerateResult> {
-    return request<GenerateResult>('/shopping-list/generate', {
+    return request<GenerateResult>('/shopping-list/generate', authInit({
       method: 'POST',
-    });
+    }));
   },
 
   createManualEntry(input: { name: string; quantityToBuy: number }): Promise<ShoppingEntry> {
-    return request<ShoppingEntry>('/shopping-list', {
+    return request<ShoppingEntry>('/shopping-list', authInit({
       method: 'POST',
       body: JSON.stringify(input),
-    });
+    }));
   },
 
   purchaseEntry(id: number, input: PurchaseInput): Promise<PurchaseResult> {
-    return request<PurchaseResult>(`/shopping-list/${encodeURIComponent(id)}/purchase`, {
+    return request<PurchaseResult>(`/shopping-list/${encodeURIComponent(id)}/purchase`, authInit({
       method: 'POST',
       body: JSON.stringify(input),
-    });
+    }));
   },
 
   deleteShoppingEntry(id: number): Promise<void> {
-    return request<void>(`/shopping-list/${encodeURIComponent(id)}`, {
+    return request<void>(`/shopping-list/${encodeURIComponent(id)}`, authInit({
       method: 'DELETE',
-    });
+    }));
   },
 };

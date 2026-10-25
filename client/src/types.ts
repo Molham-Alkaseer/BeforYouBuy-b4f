@@ -151,3 +151,33 @@ export interface ApiClient {
   purchaseEntry(id: number, input: PurchaseInput): Promise<PurchaseResult>;
   deleteShoppingEntry(id: number): Promise<void>;
 }
+
+export type HouseholdRole = "member" | "admin" | "owner";
+
+export interface SafeUser {
+  id: number;
+  email: string;
+  name: string;
+  role: HouseholdRole;
+}
+
+export interface RegisterInput {
+  email: string;
+  password: string;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface LoginResult {
+  token: string;
+  user: SafeUser;
+}
+
+export interface AuthClient {
+  register(input: RegisterInput): Promise<SafeUser>;
+  login(input: LoginInput): Promise<LoginResult>;
+  me(): Promise<SafeUser>;
+}
