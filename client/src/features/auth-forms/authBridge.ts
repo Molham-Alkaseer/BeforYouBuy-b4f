@@ -57,3 +57,10 @@ export async function loginAction(): Promise<void> {
 export async function registerAction(): Promise<unknown> {
   notConnected();
 }
+
+export type AuthRole = 'member' | 'admin' | 'owner';
+
+// TODO: replace with the role of the user from useAuth().
+export function useAuthRole(): AuthRole | null {
+  return null;
+}
