@@ -25,6 +25,7 @@ export default function Navbar() {
               Pantry
             </NavLink>
             <NavLink to="/shopping-list">Shopping</NavLink>
+            <NavLink to="/about">About us</NavLink>
           </nav>
           <div className="byb-topbar-actions">
             {canManage && (

@@ -13,6 +13,7 @@ import Navbar from "./components/Navbar";
 import RequireAuth from "./components/RequireAuth";
 import RequireAdmin from "./components/RequireAdmin";
 import FamilyPage from "./pages/FamilyPage";
+import AboutPage from "./pages/AboutPage";
 export default function App() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -37,6 +38,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/about" element={<AboutPage />} />
           <Route element={<RequireAuth />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/pantry" element={<PantryPage />} />
