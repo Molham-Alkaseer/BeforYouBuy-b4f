@@ -108,6 +108,54 @@ const MOCK_ACCOUNTS: MockAccount[] = [
     role: "owner",
     householdId: 1,
   },
+  {
+    id: 4,
+    email: "molham@example.com",
+    password: "MolhamDemo2026!",
+    name: "Molham",
+    role: "admin",
+    householdId: 1,
+  },
+  {
+    id: 5,
+    email: "rami@example.com",
+    password: "RamiDemo2026!",
+    name: "Rami",
+    role: "member",
+    householdId: 1,
+  },
+  {
+    id: 6,
+    email: "mostafa@example.com",
+    password: "MostafaDemo2026!",
+    name: "Mostafa",
+    role: "member",
+    householdId: 1,
+  },
+  {
+    id: 7,
+    email: "maya@example.com",
+    password: "MayaDemo2026!",
+    name: "Maya",
+    role: "member",
+    householdId: 1,
+  },
+  {
+    id: 8,
+    email: "mohammad@example.com",
+    password: "MohammadDemo2026!",
+    name: "Mohammad",
+    role: "member",
+    householdId: 1,
+  },
+  {
+    id: 9,
+    email: "allith@example.com",
+    password: "AllithDemo2026!",
+    name: "Allith",
+    role: "member",
+    householdId: 1,
+  },
 ];
 
 const MOCK_TOKEN_PREFIX = "mock-token-";
@@ -294,7 +342,7 @@ function createInitialState(): MockState {
     nextCategoryId: 8,
     nextPantryId: 21,
     nextShoppingId: 207,
-    nextAccountId: 4,
+    nextAccountId: Math.max(...MOCK_ACCOUNTS.map(account => account.id)) + 1,
   };
 }
 
