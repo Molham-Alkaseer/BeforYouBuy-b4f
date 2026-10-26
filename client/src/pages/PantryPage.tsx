@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../services/api-client";
 import { useAuth } from "../features/session/useAuth";
 import type { Category, PantryList, PantryQuery, PantryStatus } from "../types";
+import Icon from "../components/Icon";
+import ItemGlyph from "../components/ItemGlyph";
 import StatusBadge from "../components/StatusBadge";
 import LoadingMessage from "../components/LoadingMessage";
 import ErrorMessage from "../components/ErrorMessage";
@@ -16,10 +18,33 @@ import "../features/pantry/pantry.css";
 
 export default function PantryPage() {
   const auth = useAuth();
-  const canManage = auth.user?.householdRole === "admin" || auth.user?.householdRole === "owner";
+  const canManage =
+    auth.user?.householdRole === "admin" ||
+    auth.user?.householdRole === "owner";
+  const [params, setParams] = useSearchParams();
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [status, setStatus] = useState<PantryStatus | "">("");
+  const categoryId = params.get("category") ?? "";
+  function setCategoryId(value: string) {
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value) next.set("category", value);
+      else next.delete("category");
+      return next;
+    });
+  }
+  const status: PantryStatus | "" =
+    (["LOW STOCK", "USE SOON", "EXPIRED", "OK"] as const).find(
+      (value) => value === params.get("status"),
+    ) ?? "";
+  function setStatus(value: PantryStatus | "") {
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value) next.set("status", value);
+      else next.delete("status");
+      return next;
+    });
+  }
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryError, setCategoryError] = useState("");
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -77,84 +102,117 @@ export default function PantryPage() {
 
   function clearFilters() {
     setName("");
-    setCategoryId("");
-    setStatus("");
+    setParams({});
   }
 
   return (
     <section className="pantry-page">
       <header className="byb-page-header">
         <div>
-          <h1>Pantry</h1>
-          {data && !loading && !error && (
-            <p>
-              {data.total} {filtered ? "matching items" : "items"} · statuses as
-              of{" "}
-              <time dateTime={data.asOfDate}>{formatDate(data.asOfDate)}</time>
-            </p>
-          )}
+          <h1>
+            <span className="desktop-label">Household </span>Pantry
+          </h1>
+          <p>Manage your shared inventory and stock levels.</p>
         </div>
-        {canManage && <Link className="byb-button" to="/pantry/new">
-          Add item
-        </Link>}
       </header>
       <form
-        className="byb-panel pantry-filters"
+        className={"pantry-filters " + (filtersOpen ? "filters-open" : "")}
         role="search"
         onSubmit={(event) => event.preventDefault()}
       >
-        <label htmlFor="pantry-name">
-          Search by name
-          <input
-            id="pantry-name"
-            type="search"
-            placeholder="Try “mil”"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        <label htmlFor="pantry-category">
-          Category
-          <select
-            id="pantry-category"
-            disabled={categoriesLoading}
-            value={categoryId}
-            onChange={(event) => setCategoryId(event.target.value)}
+        <div className="pantry-search-row">
+          <label className="pantry-search" htmlFor="pantry-name">
+            <span className="byb-sr-only">Search items</span>
+            <Icon name="search" />
+            <input
+              id="pantry-name"
+              type="search"
+              placeholder="Search items..."
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="byb-button byb-button-secondary pantry-filter-toggle"
+            aria-expanded={filtersOpen}
+            aria-controls="pantry-filter-options"
+            onClick={() => setFiltersOpen((value) => !value)}
           >
-            <option value="">
-              {categoriesLoading ? "Loading categories…" : "All categories"}
-            </option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor="pantry-status">
-          Status
-          <select
-            id="pantry-status"
-            value={status}
-            onChange={(event) =>
-              setStatus(event.target.value as PantryStatus | "")
-            }
-          >
-            <option value="">All statuses</option>
-            {(["LOW STOCK", "USE SOON", "EXPIRED", "OK"] as const).map(
-              (value) => (
-                <option key={value}>{value}</option>
-              ),
-            )}
-          </select>
-        </label>
-        <button
-          className="byb-button byb-button-secondary"
-          type="button"
-          onClick={clearFilters}
+            <Icon name="filter" />
+            <span>Filters</span>
+          </button>
+        </div>
+        <div
+          className="pantry-filter-options"
+          id="pantry-filter-options"
+          hidden={!filtersOpen}
         >
-          Clear filters
-        </button>
+          <label htmlFor="pantry-category">
+            <span className="byb-sr-only">Category</span>
+            <select
+              id="pantry-category"
+              disabled={categoriesLoading}
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+            >
+              <option value="">
+                {categoriesLoading ? "Loading categories…" : "All categories"}
+              </option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label htmlFor="pantry-status">
+            <span className="byb-sr-only">Status</span>
+            <select
+              id="pantry-status"
+              value={status}
+              onChange={(event) =>
+                setStatus(event.target.value as PantryStatus | "")
+              }
+            >
+              <option value="">All statuses</option>
+              {(["LOW STOCK", "USE SOON", "EXPIRED", "OK"] as const).map(
+                (value) => (
+                  <option key={value}>{value}</option>
+                ),
+              )}
+            </select>
+          </label>
+        </div>
+        <div className="pantry-active-filters">
+          <span>
+            {categories.find((category) => String(category.id) === categoryId)
+              ?.name ?? "All categories"}
+          </span>
+          <span>{status || "All statuses"}</span>
+          <button type="button" onClick={clearFilters}>
+            Clear all
+          </button>
+        </div>
+        <div className="pantry-category-tabs" aria-label="Filter by category">
+          <button
+            type="button"
+            aria-pressed={!categoryId}
+            onClick={() => setCategoryId("")}
+          >
+            All items
+          </button>
+          {categories.map((category) => (
+            <button
+              type="button"
+              key={category.id}
+              aria-pressed={String(category.id) === categoryId}
+              onClick={() => setCategoryId(String(category.id))}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
       </form>
       {categoryError && (
         <div>
@@ -199,10 +257,12 @@ export default function PantryPage() {
               >
                 Show all items
               </button>
-            ) : (
+            ) : canManage ? (
               <Link className="byb-button" to="/pantry/new">
                 Add your first item
               </Link>
+            ) : (
+              <p className="byb-muted">Your household admin can add items.</p>
             )}
           </div>
         ) : (
@@ -219,49 +279,116 @@ export default function PantryPage() {
               <thead>
                 <tr>
                   <th scope="col">Item</th>
-                  <th scope="col">Quantity</th>
-                  <th scope="col">Minimum</th>
+                  <th scope="col">Category</th>
+                  <th scope="col">Stock level</th>
                   <th scope="col">Expiry</th>
-                  <th scope="col">Status</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((item) => (
-                  <tr key={item.id}>
-                    <th scope="row">
-                      <Link to={`/pantry/${item.id}`}>{item.name}</Link>
-                      <small>{item.categoryName}</small>
-                    </th>
-                    <td>
-                      {item.quantity} {item.unit}
-                    </td>
-                    <td className="byb-muted">
-                      {item.minimumQuantity} {item.unit}
-                    </td>
-                    <td>
-                      {item.expiryDate ? (
-                        <>
+                {data.items.map((item) => {
+                  const tone = item.statuses.includes("EXPIRED")
+                    ? "expired"
+                    : item.statuses.includes("LOW STOCK")
+                      ? "low"
+                      : item.statuses.includes("USE SOON")
+                        ? "soon"
+                        : "ok";
+                  return (
+                    <tr key={item.id} className={"pantry-row tone-" + tone}>
+                      <th scope="row" className="pantry-item-cell">
+                        <ItemGlyph
+                          name={item.name}
+                          category={item.categoryName}
+                          tone={tone}
+                        />
+                        <div>
+                          <Link to={"/pantry/" + item.id}>{item.name}</Link>
+                          <small>
+                            {tone === "expired"
+                              ? expiryDescription(item.daysUntilExpiry)
+                              : tone === "low"
+                                ? "Low stock"
+                                : tone === "soon"
+                                  ? "Use soon"
+                                  : "Stocked"}
+                          </small>
+                        </div>
+                        <div className="pantry-mobile-badges">
+                          {item.statuses.map((value) => (
+                            <StatusBadge key={value} status={value} />
+                          ))}
+                        </div>
+                      </th>
+                      <td className="pantry-category-cell">
+                        <span>{item.categoryName}</span>
+                      </td>
+                      <td className="pantry-stock-cell">
+                        <span className="pantry-stock-track" aria-hidden="true">
+                          <span
+                            style={{
+                              width:
+                                Math.min(
+                                  100,
+                                  (item.quantity /
+                                    Math.max(
+                                      item.minimumQuantity,
+                                      item.quantity,
+                                      1,
+                                    )) *
+                                    100,
+                                ) + "%",
+                            }}
+                          />
+                        </span>
+                        <span className="pantry-stock-value">
+                          {item.quantity} / {item.minimumQuantity} {item.unit}
+                          <span className="byb-sr-only">
+                            {" "}
+                            (current / minimum)
+                          </span>
+                        </span>
+                      </td>
+                      <td className="pantry-expiry-cell">
+                        {item.expiryDate ? (
                           <time dateTime={item.expiryDate}>
                             {formatDate(item.expiryDate)}
                           </time>
-                          <small>
-                            {expiryDescription(item.daysUntilExpiry)}
-                          </small>
-                        </>
-                      ) : (
-                        "No expiry date"
-                      )}
-                    </td>
-                    <td>
-                      <div className="byb-badges">
-                        {item.statuses.map((value) => (
-                          <StatusBadge key={value} status={value} />
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        ) : (
+                          <span className="byb-muted">—</span>
+                        )}
+                      </td>
+                      <td className="pantry-actions-cell">
+                        <Link
+                          className="byb-icon-button"
+                          to={"/pantry/" + item.id}
+                          aria-label={"View " + item.name}
+                        >
+                          <Icon name="chevron" />
+                        </Link>
+                        {canManage && (
+                          <Link
+                            className="byb-icon-button"
+                            to={"/pantry/" + item.id + "/edit"}
+                            aria-label={"Edit " + item.name}
+                          >
+                            <Icon name="edit" />
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={5}>
+                    Showing {data.items.length}{" "}
+                    {filtered ? "matching" : "household"} items{" "}
+                    <span>Stock / minimum to keep</span>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         ))

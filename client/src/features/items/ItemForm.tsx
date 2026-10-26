@@ -1,24 +1,24 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import EmptyState from '../../components/EmptyState';
-import ErrorMessage from '../../components/ErrorMessage';
-import LoadingMessage from '../../components/LoadingMessage';
-import { readApiError } from './apiError';
-import { itemApi } from './itemApi';
-import { useItemSession } from './itemSession';
-import type { ItemSession } from './itemSession';
-import type { Category, PantryItem } from './itemTypes';
-import { parseRouteId } from './parseRouteId';
-import RetryError from './RetryError';
-import ItemFormBody from './ItemFormBody';
-import './items.css';
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import EmptyState from "../../components/EmptyState";
+import ErrorMessage from "../../components/ErrorMessage";
+import LoadingMessage from "../../components/LoadingMessage";
+import { readApiError } from "./apiError";
+import { itemApi } from "./itemApi";
+import { useItemSession } from "./itemSession";
+import type { ItemSession } from "./itemSession";
+import type { Category, PantryItem } from "./itemTypes";
+import { parseRouteId } from "./parseRouteId";
+import RetryError from "./RetryError";
+import ItemFormBody from "./ItemFormBody";
+import "./items.css";
 
 // The page is always in exactly one of these situations.
 type LoadState =
-  | { kind: 'loading' }
-  | { kind: 'not-found' }
-  | { kind: 'error'; message: string }
-  | { kind: 'ready'; categories: Category[]; item: PantryItem | null };
+  | { kind: "loading" }
+  | { kind: "not-found" }
+  | { kind: "error"; message: string }
+  | { kind: "ready"; categories: Category[]; item: PantryItem | null };
 
 interface ItemFormProps {
   // Only for trying the screen with a chosen session. Normal pages pass nothing.
@@ -34,7 +34,7 @@ export default function ItemForm({ session: sessionOverride }: ItemFormProps) {
   const itemId = isEdit ? parseRouteId(id) : null;
   const invalidId = isEdit && itemId === null;
 
-  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0); // goes up by 1 on every "Try again"
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function ItemForm({ session: sessionOverride }: ItemFormProps) {
     }
 
     let cancelled = false; // stops old requests from changing the screen
-    setState({ kind: 'loading' });
+    setState({ kind: "loading" });
 
     async function load() {
       try {
@@ -54,17 +54,17 @@ export default function ItemForm({ session: sessionOverride }: ItemFormProps) {
             : itemApi.getPantryItem(itemId),
         ]);
         if (!cancelled) {
-          setState({ kind: 'ready', categories: categoryList.items, item });
+          setState({ kind: "ready", categories: categoryList.items, item });
         }
       } catch (error) {
         if (cancelled) {
           return;
         }
         const apiError = readApiError(error);
-        if (apiError.code === 'ITEM_NOT_FOUND') {
-          setState({ kind: 'not-found' });
+        if (apiError.code === "ITEM_NOT_FOUND") {
+          setState({ kind: "not-found" });
         } else {
-          setState({ kind: 'error', message: apiError.message });
+          setState({ kind: "error", message: apiError.message });
         }
       }
     }
@@ -87,11 +87,11 @@ export default function ItemForm({ session: sessionOverride }: ItemFormProps) {
     );
   }
 
-  if (state.kind === 'loading') {
+  if (state.kind === "loading") {
     return <LoadingMessage message="Loading the form..." />;
   }
 
-  if (state.kind === 'not-found') {
+  if (state.kind === "not-found") {
     return (
       <section className="item-page">
         {backLink}
@@ -100,7 +100,7 @@ export default function ItemForm({ session: sessionOverride }: ItemFormProps) {
     );
   }
 
-  if (state.kind === 'error') {
+  if (state.kind === "error") {
     return (
       <section className="item-page">
         {backLink}
@@ -117,14 +117,11 @@ export default function ItemForm({ session: sessionOverride }: ItemFormProps) {
   return (
     <section className="item-page">
       {backLink}
-      <h1>{isEdit ? `Edit ${item?.name ?? 'item'}` : 'Add item'}</h1>
-      <p>
-        The same form is used to add and edit an item. Statuses are never typed
-        in — they are worked out from what you enter here.
-      </p>
+      <h1>{isEdit ? `Edit ${item?.name ?? "item"}` : "Add New Item"}</h1>
+      <p>Keep your household inventory up to date.</p>
 
       <ItemFormBody
-        key={item?.id ?? 'new'}
+        key={item?.id ?? "new"}
         categories={categories}
         item={item}
         session={session}

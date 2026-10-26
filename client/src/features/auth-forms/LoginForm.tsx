@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ChangeEvent, FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import { readApiError } from '../items/apiError';
-import AuthField from './AuthField';
-import { validateLogin } from './authValidation';
-import type { FieldErrors, LoginValues } from './authTypes';
-import './auth-forms.css';
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { readApiError } from "../items/apiError";
+import AuthField from "./AuthField";
+import { validateLogin } from "./authValidation";
+import type { FieldErrors, LoginValues } from "./authTypes";
+import "./auth-forms.css";
 
 interface LoginFormProps {
   // Signs the user in. The real shared login(input) is plugged in later.
@@ -19,20 +19,20 @@ interface LoginFormProps {
 }
 
 // One message for an unknown email and for a wrong password.
-const INVALID_CREDENTIALS_MESSAGE = 'The email or password is incorrect.';
+const INVALID_CREDENTIALS_MESSAGE = "The email or password is incorrect.";
 
 export default function LoginForm({
   onLogin,
   onSuccess,
   registerPath,
-  initialEmail = '',
+  initialEmail = "",
 }: LoginFormProps) {
   const [values, setValues] = useState<LoginValues>({
     email: initialEmail,
-    password: '',
+    password: "",
   });
   const [errors, setErrors] = useState<FieldErrors<LoginValues>>({});
-  const [summary, setSummary] = useState('');
+  const [summary, setSummary] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Stops a late answer from changing the screen after the user left it.
@@ -70,7 +70,7 @@ export default function LoginForm({
       return; // a request is already running
     }
 
-    setSummary('');
+    setSummary("");
 
     const found = validateLogin(values);
     setErrors(found);
@@ -86,7 +86,7 @@ export default function LoginForm({
       if (!isMounted.current) {
         return;
       }
-      setValues((current) => ({ ...current, password: '' }));
+      setValues((current) => ({ ...current, password: "" }));
       onSuccess();
     } catch (caught) {
       if (!isMounted.current) {
@@ -95,7 +95,7 @@ export default function LoginForm({
       // The typed values stay in the form.
       const apiError = readApiError(caught);
       setSummary(
-        apiError.code === 'INVALID_CREDENTIALS'
+        apiError.code === "INVALID_CREDENTIALS"
           ? INVALID_CREDENTIALS_MESSAGE
           : apiError.message,
       );
@@ -108,16 +108,16 @@ export default function LoginForm({
 
   return (
     <form className="auth-form" onSubmit={handleSubmit} noValidate>
-      {summary !== '' && (
+      {summary !== "" && (
         <p role="alert" className="auth-error-summary">
           {summary}
         </p>
       )}
 
-      {summary === '' && problems > 0 && (
+      {summary === "" && problems > 0 && (
         <p role="alert" className="auth-error-summary">
-          <strong>You could not be signed in.</strong> Please fix the {problems}{' '}
-          {problems === 1 ? 'problem' : 'problems'} marked below.
+          <strong>You could not be signed in.</strong> Please fix the {problems}{" "}
+          {problems === 1 ? "problem" : "problems"} marked below.
         </p>
       )}
 
@@ -127,6 +127,7 @@ export default function LoginForm({
             {...inputProps}
             name="email"
             type="email"
+            placeholder="name@example.com"
             autoComplete="email"
             value={values.email}
             onChange={handleChange}
@@ -140,6 +141,7 @@ export default function LoginForm({
             {...inputProps}
             name="password"
             type="password"
+            placeholder="Enter your password"
             autoComplete="current-password"
             value={values.password}
             onChange={handleChange}
@@ -148,7 +150,7 @@ export default function LoginForm({
       </AuthField>
 
       <button type="submit" className="auth-submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Signing in...' : 'Sign in'}
+        {isSubmitting ? "Signing in..." : "Sign in"}
       </button>
 
       <p className="auth-links">
