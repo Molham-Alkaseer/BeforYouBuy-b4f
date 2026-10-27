@@ -20,7 +20,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
     const defaults: Record<number, string> = {
       400: 'VALIDATION_ERROR',
-      403: 'INTERNAL_TOOL_FORBIDDEN',
+      401: 'UNAUTHENTICATED',
+      403: 'FORBIDDEN',
       404: 'NOT_FOUND',
     };
     // Never log request bodies, headers, database URIs or raw driver errors.

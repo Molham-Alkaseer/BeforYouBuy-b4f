@@ -1,9 +1,403 @@
-.pantry-filters { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr)) auto; gap: 16px; align-items: end; margin-bottom: 24px; padding: 20px; }
-.pantry-filters label { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; font-weight: 650; min-width: 0; }
-.pantry-filters input, .pantry-filters select { width: 100%; min-height: 46px; border: 1px solid #dcd3c4; border-radius: 8px; padding: 10px 12px; color: var(--byb-text); background: white; font-weight: 400; }
-.pantry-filters button { min-height: 46px; font-size: .85rem; }
-.pantry-table { min-width: 740px; }
-.pantry-table tbody th { width: 26%; }
-.pantry-table td:last-child { width: 24%; }
-@media (max-width: 1200px) { .pantry-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 480px) { .pantry-filters { grid-template-columns: 1fr; } }
+.pantry-page {
+  position: relative;
+}
+.pantry-page > .byb-page-header {
+  padding-right: 370px;
+}
+.pantry-filters {
+  margin-bottom: 30px;
+}
+.pantry-search-row {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.pantry-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 255px;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--byb-border);
+  border-radius: 12px;
+  background: white;
+  color: var(--byb-subtle);
+}
+.pantry-search .byb-icon {
+  width: 17px;
+  height: 17px;
+}
+.pantry-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--byb-text);
+  outline-offset: 6px;
+  font-size: 13px;
+}
+.pantry-search input::placeholder {
+  color: var(--byb-subtle);
+}
+.pantry-filter-options:not([hidden]) {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.pantry-filter-options select {
+  border: 1px solid var(--byb-border);
+  border-radius: 10px;
+  background: white;
+  min-height: 42px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--byb-primary);
+  max-width: 100%;
+}
+.pantry-active-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.pantry-active-filters > span {
+  padding: 5px 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 500;
+  color: var(--byb-primary);
+  background: #0b3d2e19;
+  border-radius: 20px;
+}
+.pantry-active-filters button {
+  color: var(--byb-subtle);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 1px;
+  background: none;
+  border: 0;
+  min-height: 36px;
+  margin-left: 4px;
+}
+.pantry-category-tabs {
+  display: none;
+}
+.pantry-table tbody th {
+  width: 28%;
+}
+.pantry-item-cell {
+  color: var(--byb-text);
+  position: relative;
+}
+.pantry-item-cell > .item-glyph {
+  float: left;
+  margin-right: 16px;
+  width: 42px;
+  height: 44px;
+  border-radius: 12px;
+}
+.pantry-item-cell > div:not(.pantry-mobile-badges) {
+  padding-top: 2px;
+}
+.pantry-item-cell a {
+  font-size: 14px;
+  font-weight: 600;
+}
+.pantry-item-cell small {
+  font-size: 10px;
+  color: inherit;
+}
+.tone-expired .pantry-item-cell small,
+.tone-expired .pantry-expiry-cell {
+  color: #f43f46;
+}
+.tone-low .pantry-item-cell small,
+.tone-soon .pantry-expiry-cell {
+  color: #da8500;
+}
+.pantry-category-cell span {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 4px 7px;
+  background: #f3f4f6;
+  color: var(--byb-text);
+  white-space: nowrap;
+}
+.pantry-stock-cell {
+  color: var(--byb-text);
+  white-space: nowrap;
+}
+.pantry-stock-track {
+  display: inline-block;
+  width: 96px;
+  height: 8px;
+  background: #f0f1f3;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-right: 12px;
+  vertical-align: middle;
+}
+.pantry-stock-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--byb-primary);
+}
+.tone-low .pantry-stock-track > span {
+  background: var(--byb-amber);
+}
+.tone-expired .pantry-stock-track > span {
+  background: var(--byb-danger);
+}
+.tone-ok .pantry-stock-track > span {
+  background: var(--byb-mint);
+}
+.pantry-stock-value {
+  font-size: 11px;
+}
+.pantry-expiry-cell {
+  color: #526078;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.pantry-actions-cell {
+  white-space: nowrap;
+  text-align: right;
+}
+.pantry-actions-cell .byb-icon-button {
+  background: transparent;
+  width: 28px;
+  height: 32px;
+  padding: 6px;
+  color: var(--byb-subtle);
+}
+.pantry-actions-cell .byb-icon-button:hover {
+  background: var(--byb-bg);
+  color: var(--byb-primary);
+}
+.pantry-mobile-badges {
+  display: none;
+}
+.pantry-table tfoot td {
+  padding: 16px 28px;
+  background: #fafbfc;
+  color: var(--byb-subtle);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  font-size: 10px;
+}
+.pantry-table tfoot span {
+  float: right;
+  text-transform: none;
+  letter-spacing: 0;
+}
+@media (min-width: 701px) and (max-width: 1000px) {
+  .pantry-page > .byb-page-header {
+    padding-right: 0;
+  }
+  .pantry-search-row {
+    position: static;
+    margin-bottom: 20px;
+  }
+  .pantry-stock-track {
+    display: block;
+    margin-bottom: 5px;
+  }
+  .pantry-table th,
+  .pantry-table td {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+@media (max-width: 700px) {
+  .pantry-page > .byb-page-header {
+    padding: 0;
+    margin-bottom: 22px;
+  }
+  .pantry-page > .byb-page-header h1 {
+    font-size: 24px;
+    color: var(--byb-primary);
+  }
+  .pantry-page > .byb-page-header p {
+    display: none;
+  }
+  .pantry-filters {
+    margin-bottom: 24px;
+  }
+  .pantry-search-row {
+    position: static;
+    width: 100%;
+    margin-bottom: 16px;
+    gap: 8px;
+  }
+  .pantry-search {
+    flex: 1;
+    width: auto;
+    height: 42px;
+  }
+  .pantry-filter-toggle {
+    padding: 10px;
+  }
+  .pantry-filter-toggle span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .pantry-filter-options {
+    gap: 8px;
+  }
+  .pantry-filter-options label {
+    flex: 1;
+    min-width: 0;
+  }
+  .pantry-filter-options select {
+    width: 100%;
+  }
+  .pantry-active-filters {
+    display: none;
+  }
+  .filters-open .pantry-active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+  }
+  .pantry-category-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    scrollbar-width: none;
+  }
+  .pantry-category-tabs button {
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-height: 32px;
+    padding: 7px 12px;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 30px;
+    color: var(--byb-subtle);
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 0.4px;
+  }
+  .pantry-category-tabs button[aria-pressed="true"] {
+    color: white;
+    background: var(--byb-primary);
+    border-color: var(--byb-primary);
+  }
+  .pantry-page > .byb-table-scroll {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+  .pantry-table,
+  .pantry-table tbody {
+    display: block;
+    min-width: 0;
+  }
+  .pantry-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .pantry-table .pantry-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    position: relative;
+    margin-bottom: 12px;
+    border: 1px solid #eef0f1;
+    border-radius: 16px;
+    background: white;
+    padding: 16px 14px 14px;
+    box-shadow: var(--byb-shadow);
+  }
+  .pantry-table .pantry-item-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0;
+    border: 0;
+    width: 100%;
+  }
+  .pantry-item-cell > .item-glyph {
+    width: 46px;
+    height: 48px;
+    margin: 0;
+    float: none;
+  }
+  .pantry-item-cell > div:not(.pantry-mobile-badges) {
+    min-width: 0;
+    flex: 1;
+    padding: 0 0 16px;
+  }
+  .pantry-item-cell a {
+    font-size: 12px;
+    display: block;
+  }
+  .pantry-item-cell small {
+    display: none;
+  }
+  .pantry-mobile-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 3px;
+    max-width: 86px;
+    align-self: flex-start;
+  }
+  .pantry-mobile-badges .byb-badge {
+    font-size: 7px;
+    padding: 2px 5px;
+  }
+  .pantry-table .pantry-stock-cell {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 7px;
+    padding: 0 0 0 58px;
+    margin-top: -17px;
+    border: 0;
+  }
+  .pantry-stock-track {
+    width: 100%;
+    height: 5px;
+    margin: 0;
+  }
+  .pantry-stock-value {
+    color: var(--byb-subtle);
+    font-size: 10px;
+  }
+  .pantry-table .pantry-category-cell,
+  .pantry-table .pantry-expiry-cell,
+  .pantry-table .pantry-actions-cell {
+    display: none;
+  }
+  .pantry-table tfoot,
+  .pantry-table tfoot tr,
+  .pantry-table tfoot td {
+    display: block;
+  }
+  .pantry-table tfoot td {
+    padding: 14px 0;
+    background: transparent;
+    border: 0;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+  }
+  .pantry-table tfoot span {
+    display: none;
+  }
+}

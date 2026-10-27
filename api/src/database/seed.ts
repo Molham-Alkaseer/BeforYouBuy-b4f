@@ -45,12 +45,12 @@ export class SeedService implements OnApplicationBootstrap {
       .createIndex({ id: 1 }, { unique: true });
     await db
       .collection('pantry_items')
-      .createIndex({ normalizedName: 1 }, { unique: true });
+      .createIndex({ householdId: 1, normalizedName: 1 }, { unique: true });
     await db
       .collection('shopping_entries')
       .createIndex({ id: 1 }, { unique: true });
     await db.collection('shopping_entries').createIndex(
-      { normalizedName: 1 },
+      { householdId: 1, normalizedName: 1 },
       {
         unique: true,
         partialFilterExpression: { status: 'Pending' },
@@ -99,6 +99,7 @@ export class SeedService implements OnApplicationBootstrap {
       await this.connection.collection('pantry_items').insertMany(
         seedPantry.map((item) => ({
           id: item.id,
+          householdId: 1,
           name: item.name,
           normalizedName: item.name.toLowerCase(),
           categoryId: item.categoryId,

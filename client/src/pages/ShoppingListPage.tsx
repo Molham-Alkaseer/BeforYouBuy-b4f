@@ -1,10 +1,49 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api-client";
+import { useAuth } from "../features/session/useAuth";
 import { readApiError } from "../features/items/apiError";
 import { ShoppingList, ShoppingEntry } from "../types";
+import Icon from "../components/Icon";
+import ItemGlyph from "../components/ItemGlyph";
+import Modal from "../components/Modal";
 import "./shopping-list.css";
 
-export default function ShoppingListPage() {
+export default function ShoppingListPage({
+  historyOnly = false,
+}: {
+  historyOnly?: boolean;
+}) {
+  const { status, user } = useAuth();
+  // Dispose pending form state when the signed-in identity or role changes.
+  return (
+    <ShoppingListSession
+      historyOnly={historyOnly}
+      key={`${status}:${user?.id}:${user?.householdRole}`}
+    />
+  );
+}
+
+function ShoppingListSession({ historyOnly }: { historyOnly: boolean }) {
+  const [params, setParams] = useSearchParams();
+  const showHistory = historyOnly || params.get("view") === "history";
+  const manualOpen = params.get("add") === "manual";
+  const closeManual = () =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("add");
+        return next;
+      },
+      { replace: true },
+    );
+  const navigate = useNavigate();
+  const { status, user } = useAuth();
+  const isAuthenticated = status === "authenticated";
+  const isAdminOrOwner =
+    isAuthenticated &&
+    (user?.householdRole === "admin" || user?.householdRole === "owner");
+
   const [pendingData, setPendingData] = useState<ShoppingList | null>(null);
   const [purchasedData, setPurchasedData] = useState<ShoppingList | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,8 +66,13 @@ export default function ShoppingListPage() {
     Record<string, string[]>
   >({});
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const purchaseInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (purchasingItem) purchaseInput.current?.focus();
+  }, [purchasingItem]);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -42,7 +86,12 @@ export default function ShoppingListPage() {
       setPurchasedData(purchased);
     } catch (error) {
       const err = readApiError(error);
-      setError(err.message || "Failed to load shopping list");
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
+        setAuthMessage("Please sign in to continue shopping.");
+      } else {
+        setError(err.message || "Failed to load shopping list");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -52,8 +101,24 @@ export default function ShoppingListPage() {
     loadData();
   }, []);
 
+  const isAnyActionRunning =
+    isLoading ||
+    isGenerating ||
+    isSubmittingManual ||
+    isPurchasing ||
+    deletingId !== null;
+
+  const requireSignIn = () => {
+    navigate("/login?returnTo=%2Fshopping-list");
+  };
+
   const handleGenerate = async () => {
     if (isAnyActionRunning) return;
+    if (!isAdminOrOwner) return;
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
     setIsGenerating(true);
     setError(null);
     setGenerateMsg(null);
@@ -65,7 +130,11 @@ export default function ShoppingListPage() {
       await loadData();
     } catch (error) {
       const err = readApiError(error);
-      setError(err.message || "Failed to generate list");
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
+      } else {
+        setError(err.message || "Failed to generate list");
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -74,6 +143,11 @@ export default function ShoppingListPage() {
   const handleAddManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAnyActionRunning) return;
+    if (!isAdminOrOwner) return;
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
     if (
       !manualName.trim() ||
       manualQty === "" ||
@@ -93,10 +167,15 @@ export default function ShoppingListPage() {
       });
       setManualName("");
       setManualQty("");
+      closeManual();
       await loadData();
     } catch (error) {
       const err = readApiError(error);
-      setManualError(err.fieldErrors?.name?.[0] || err.message);
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
+      } else {
+        setManualError(err.fieldErrors?.name?.[0] || err.message);
+      }
     } finally {
       setIsSubmittingManual(false);
     }
@@ -104,6 +183,7 @@ export default function ShoppingListPage() {
 
   const handleDelete = async (id: number) => {
     if (isAnyActionRunning) return;
+    if (!isAdminOrOwner) return;
     if (!window.confirm("Are you sure you want to remove this entry?")) return;
     setDeletingId(id);
     try {
@@ -112,14 +192,25 @@ export default function ShoppingListPage() {
       await loadData();
     } catch (error) {
       const err = readApiError(error);
-      alert(err.message);
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
+      } else if (err.statusCode === 403) {
+        setError("You do not have permission to remove this entry.");
+      } else {
+        alert(err.message);
+      }
     } finally {
       setDeletingId(null);
     }
   };
 
   const openPurchasePanel = (item: ShoppingEntry) => {
-    if (isAnyActionRunning) return; // منع التبديل أثناء معالجة طلب آخر
+    if (isAnyActionRunning) return;
+    if (!isAdminOrOwner) return;
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
     setPurchasingItem(item);
     setPurchaseQty(item.quantityToBuy);
     setPurchaseDate("");
@@ -129,6 +220,11 @@ export default function ShoppingListPage() {
   const handleConfirmPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAnyActionRunning || !purchasingItem) return;
+    if (!isAdminOrOwner) return;
+    if (!isAuthenticated) {
+      requireSignIn();
+      return;
+    }
     if (
       purchaseQty === "" ||
       !Number.isFinite(purchaseQty) ||
@@ -151,10 +247,14 @@ export default function ShoppingListPage() {
       await loadData();
     } catch (error) {
       const err = readApiError(error);
-      if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
-        setPurchaseErrors(err.fieldErrors);
+      if (err.statusCode === 401) {
+        setError("Your session expired. Please sign in again.");
       } else {
-        setPurchaseErrors({ general: [err.message] });
+        if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+          setPurchaseErrors(err.fieldErrors);
+        } else {
+          setPurchaseErrors({ general: [err.message] });
+        }
       }
     } finally {
       setIsPurchasing(false);
@@ -170,163 +270,243 @@ export default function ShoppingListPage() {
     });
   };
 
-  const renderBadges = (statuses: string[]) => {
-    if (!statuses || statuses.length === 0) {
-      return (
-        <span className="shopping-badge shopping-badge-manual">
-          ADDED BY HAND
-        </span>
-      );
-    }
-    return statuses.map((status) => {
-      let badgeClass = "shopping-badge-ok";
-      if (status === "LOW STOCK") badgeClass = "shopping-badge-low";
-      if (status === "USE SOON") badgeClass = "shopping-badge-soon";
-      if (status === "EXPIRED") badgeClass = "shopping-badge-expired";
-      return (
-        <span key={status} className={`shopping-badge ${badgeClass}`}>
-          {status}
-        </span>
-      );
-    });
-  };
+  const isExpired = purchasingItem?.pantryStatuses.includes("EXPIRED");
+  const pendingItems = pendingData?.items ?? [];
+  const suggested = pendingItems.filter((item) => item.pantryItemId !== null);
+  const manual = pendingItems.filter((item) => item.pantryItemId === null);
+  const historyGroups = Object.entries(
+    (purchasedData?.items ?? []).reduce<Record<string, ShoppingEntry[]>>(
+      (groups, item) => {
+        const day = item.purchasedAt
+          ? formatDate(item.purchasedAt)
+          : "Purchase date unavailable";
+        (groups[day] ??= []).push(item);
+        return groups;
+      },
+      {},
+    ),
+  );
+
+  function renderPending(
+    items: ShoppingEntry[],
+    title: string,
+    icon: "sparkle" | "edit",
+  ) {
+    return (
+      <section className="shopping-group" aria-label={title}>
+        <div className="shopping-group-heading">
+          <h2>
+            <Icon name={icon} />
+            {title}
+          </h2>
+          <span>
+            {items.length} {items.length === 1 ? "item" : "items"}
+          </span>
+        </div>
+        <div className="shopping-list">
+          {items.map((item) => (
+            <article className="shopping-entry" key={item.id}>
+              <ItemGlyph name={item.name} />
+              <div className="shopping-item-info">
+                <h3>{item.name}</h3>
+                <p
+                  className={
+                    item.pantryStatuses.includes("EXPIRED")
+                      ? "shopping-expired"
+                      : ""
+                  }
+                >
+                  {item.pantryItemId === null
+                    ? "Added by hand"
+                    : item.pantryStatuses.includes("EXPIRED")
+                      ? "Expired stock · replacement needed"
+                      : item.pantryStatuses.includes("LOW STOCK")
+                        ? "Low stock · suggested replenishment"
+                        : "From your pantry"}
+                </p>
+              </div>
+              <div className="shopping-item-qty">
+                <small>QUANTITY TO BUY</small>
+                <strong>
+                  {item.quantityToBuy} <span>{item.unit || ""}</span>
+                </strong>
+              </div>
+              {isAdminOrOwner && (
+                <div className="shopping-item-actions">
+                  <button
+                    onClick={() => openPurchasePanel(item)}
+                    disabled={isAnyActionRunning}
+                    className="byb-button shopping-purchase-button"
+                    aria-label={"Record purchase of " + item.name}
+                  >
+                    <Icon name="check" />
+                    <span>Record purchase</span>
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    disabled={isAnyActionRunning}
+                    className="byb-icon-button shopping-remove"
+                    aria-label={"Remove " + item.name}
+                  >
+                    <Icon name="trash" />
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+        {!items.length && (
+          <p className="shopping-empty">
+            {icon === "sparkle"
+              ? "No suggested items. Regenerate the list to check your pantry."
+              : "No manual entries yet."}
+          </p>
+        )}
+      </section>
+    );
+  }
 
   if (isLoading && !pendingData)
-    return <div className="shopping-loading">Loading shopping list...</div>;
-
-  if (error && !pendingData) {
     return (
-      <div className="shopping-error">
-        <p style={{ marginBottom: "1rem" }}>Error: {error}</p>
-        <button onClick={loadData} className="shopping-btn-primary">
+      <p className="byb-message" role="status">
+        Loading shopping list…
+      </p>
+    );
+  if (error && !pendingData)
+    return (
+      <div className="byb-message byb-error" role="alert">
+        {error}
+        <button onClick={loadData} className="byb-button byb-button-secondary">
           Retry
         </button>
       </div>
     );
-  }
-
-  const isExpired = purchasingItem?.pantryStatuses.includes("EXPIRED");
-  const isAnyActionRunning =
-    isLoading ||
-    isGenerating ||
-    isSubmittingManual ||
-    isPurchasing ||
-    deletingId !== null;
 
   return (
-    <div className="shopping-page">
-      <div className="shopping-header">
+    <section className="shopping-page">
+      <header className="byb-page-header">
         <div>
-          <h1 className="shopping-title">Shopping list</h1>
-          <p className="shopping-subtitle">
-            {pendingData?.pendingSummary.total} pending entries · pressing
-            generate again never adds an item twice
+          <h1>{historyOnly ? "Purchase History" : "Shopping List"}</h1>
+          <p>
+            {historyOnly ? (
+              "A record of what your household has bought."
+            ) : (
+              <>
+                <strong>{pendingItems.length} items</strong> pending ·{" "}
+                {suggested.length} suggested, {manual.length} manual
+              </>
+            )}
           </p>
         </div>
-        <button
-          onClick={handleGenerate}
-          disabled={isAnyActionRunning}
-          className="shopping-btn-primary"
-        >
-          {isGenerating ? "Generating..." : "Generate shopping list"}
-        </button>
-      </div>
-
+        {!historyOnly && isAdminOrOwner && (
+          <button
+            onClick={handleGenerate}
+            disabled={isAnyActionRunning}
+            className="byb-button byb-button-secondary shopping-generate"
+          >
+            <Icon name="sparkle" />
+            {isGenerating ? "Updating…" : "Regenerate list"}
+          </button>
+        )}
+      </header>
       {generateMsg && (
-        <div
-          style={{
-            backgroundColor: "#e6f4ea",
-            color: "#1e4620",
-            padding: "1rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #cce8d6",
-          }}
-        >
+        <p className="byb-message" role="status">
           {generateMsg}
-        </div>
+        </p>
       )}
-
-      {error && pendingData && (
-        <div
-          style={{
-            backgroundColor: "#fee2e2",
-            color: "#991b1b",
-            padding: "1rem",
-            borderRadius: "0.5rem",
-            display: "flex",
-            justifyContent: "space-between",
-          }}
-        >
-          <span>{error}</span>
+      {authMessage && (
+        <p className="byb-message" role="alert">
+          {authMessage}
+        </p>
+      )}
+      {error && (
+        <div className="byb-message byb-error" role="alert">
+          {error}
           <button
             onClick={loadData}
-            style={{
-              fontWeight: "bold",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-            }}
+            className="byb-button byb-button-secondary"
           >
             Retry
           </button>
         </div>
       )}
-
-      <section className="shopping-panel">
-        <div className="shopping-panel-header">
-          <h2 className="shopping-panel-title">Pending</h2>
-          <p className="shopping-panel-desc">
-            Suggested amounts bring each item back to its minimum. Expired stock
-            counts as zero.
-          </p>
+      {!historyOnly && (
+        <div className="shopping-tabs" aria-label="Shopping list views">
+          <button aria-pressed={!showHistory} onClick={() => setParams({})}>
+            Pending <span>{pendingItems.length}</span>
+          </button>
+          <button
+            aria-pressed={showHistory}
+            onClick={() => setParams({ view: "history" })}
+          >
+            Purchased history
+          </button>
         </div>
-        <div className="shopping-list">
-          {pendingData?.items.map((item) => (
-            <div key={item.id} className="shopping-list-item">
-              <div className="shopping-item-info">
-                <h3 className="shopping-item-name">{item.name}</h3>
-                <p className="shopping-item-meta">
-                  {item.pantryItemId ? "From your pantry" : "Not a pantry item"}{" "}
-                  · created {formatDate(item.createdAt)}
-                </p>
-              </div>
-              <div className="shopping-item-qty">
+      )}
+      {showHistory ? (
+        <div className="shopping-history">
+          {historyGroups.map(([date, items]) => (
+            <section key={date} aria-label={date}>
+              <h2 className="shopping-history-date">
+                <Icon name="calendar" />
+                {date}
                 <span>
-                  Buy {item.quantityToBuy} {item.unit || ""}
+                  {items.length} {items.length === 1 ? "item" : "items"}
                 </span>
-                <span className="shopping-badges-container">
-                  {renderBadges(item.pantryStatuses)}
-                </span>
+              </h2>
+              <div className="shopping-history-group">
+                {items.map((item) => (
+                  <article className="shopping-history-entry" key={item.id}>
+                    <ItemGlyph name={item.name} />
+                    <div>
+                      <h3>{item.name}</h3>
+                      <p>
+                        {item.purchasedQuantity} {item.unit || "units"} ·{" "}
+                        <span>Purchased</span>
+                      </p>
+                    </div>
+                    <Icon name="check" />
+                  </article>
+                ))}
               </div>
-              <div className="shopping-item-actions">
-                <button
-                  onClick={() => openPurchasePanel(item)}
-                  disabled={isAnyActionRunning}
-                  className="shopping-btn-primary shopping-btn-small"
-                >
-                  Mark purchased
-                </button>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  disabled={isAnyActionRunning}
-                  className="shopping-btn-link shopping-btn-remove"
-                >
-                  {deletingId === item.id ? "Removing..." : "Remove"}
-                </button>
-              </div>
-            </div>
+            </section>
           ))}
-          {pendingData?.items.length === 0 && (
-            <div className="shopping-empty">No pending items.</div>
+          {!historyGroups.length && (
+            <div className="byb-panel shopping-empty">
+              <Icon name="history" />
+              <h2>No purchases yet</h2>
+              <p>Items you mark as purchased will appear here.</p>
+            </div>
           )}
         </div>
-      </section>
-
-      <div className="shopping-grid">
-        <section className="shopping-panel shopping-manual-panel">
-          <h2 className="shopping-panel-title">Add your own entry</h2>
-          <p className="shopping-panel-desc">
-            For things that are not pantry items, like birthday candles.
+      ) : (
+        <>
+          {renderPending(suggested, "Suggested for Pantry", "sparkle")}
+          {renderPending(manual, "Manual Entries", "edit")}
+          {isAdminOrOwner && (
+            <button
+              onClick={() => setParams({ add: "manual" })}
+              className="shopping-add-manual"
+            >
+              <Icon name="plus" />
+              Add manual entry
+            </button>
+          )}
+          <p className="shopping-footnote">
+            <Icon name="check" />
+            Recording a pantry purchase automatically updates its stock level.
+          </p>
+        </>
+      )}
+      {isAdminOrOwner && (
+        <Modal
+          open={manualOpen}
+          onClose={closeManual}
+          title="Add a manual entry"
+          busy={isSubmittingManual}
+        >
+          <p className="byb-muted">
+            For extras outside your pantry, like birthday candles.
           </p>
           <form onSubmit={handleAddManual} className="shopping-form">
             <div className="shopping-form-row">
@@ -358,7 +538,9 @@ export default function ShoppingListPage() {
               </div>
             </div>
             {manualError && (
-              <p className="shopping-error-text">{manualError}</p>
+              <p className="shopping-error-text" role="alert">
+                {manualError}
+              </p>
             )}
             <button
               type="submit"
@@ -368,144 +550,105 @@ export default function ShoppingListPage() {
               {isSubmittingManual ? "Adding..." : "Add to list"}
             </button>
           </form>
-        </section>
-
-        {purchasingItem && (
-          <section className="shopping-purchase-panel">
-            <h2 className="shopping-panel-title">
-              Mark {purchasingItem.name} as purchased
-            </h2>
-
-            {isExpired && (
-              <p
-                className="shopping-purchase-warning"
-                style={{ color: "#991b1b", fontWeight: 500 }}
-              >
-                The old {purchasingItem.name} is expired, so it is discarded.
-                The new quantity will be exactly what you bought. A new expiry
-                date is required.
-              </p>
-            )}
-
-            <form onSubmit={handleConfirmPurchase} className="shopping-form">
-              <div className="shopping-form-row">
-                <div className="shopping-form-group shopping-w-md">
-                  <label htmlFor="purchaseQty">Quantity bought</label>
-                  <input
-                    id="purchaseQty"
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={purchaseQty}
-                    onChange={(e) =>
-                      setPurchaseQty(
-                        e.target.value ? Number(e.target.value) : "",
-                      )
-                    }
-                    className={`shopping-input ${purchaseErrors.purchasedQuantity ? "shopping-input-error" : ""}`}
-                    required
-                  />
-                  {purchaseErrors.purchasedQuantity && (
-                    <p className="shopping-error-text">
-                      {purchaseErrors.purchasedQuantity[0]}
-                    </p>
-                  )}
-                </div>
-
-                {purchasingItem.pantryItemId !== null && (
-                  <div className="shopping-form-group shopping-flex-1">
-                    <label htmlFor="purchaseDate">
-                      New expiry date{" "}
-                      {isExpired && <span style={{ color: "red" }}>*</span>}
-                    </label>
+        </Modal>
+      )}
+      {isAdminOrOwner && (
+        <Modal
+          open={Boolean(purchasingItem)}
+          onClose={() => setPurchasingItem(null)}
+          title={
+            "Record purchase" +
+            (purchasingItem ? ": " + purchasingItem.name : "")
+          }
+          busy={isPurchasing}
+        >
+          {purchasingItem && (
+            <>
+              {isExpired && (
+                <p className="byb-message byb-error">
+                  The expired stock will be replaced with the quantity you
+                  bought. Please enter a new expiry date.
+                </p>
+              )}
+              <form onSubmit={handleConfirmPurchase} className="shopping-form">
+                <div className="shopping-form-row">
+                  <div className="shopping-form-group shopping-w-md">
+                    <label htmlFor="purchaseQty">Quantity bought</label>
                     <input
-                      id="purchaseDate"
-                      type="date"
-                      value={purchaseDate}
-                      onChange={(e) => setPurchaseDate(e.target.value)}
-                      required={isExpired}
-                      className={`shopping-input ${purchaseErrors.newExpiryDate ? "shopping-input-error" : ""}`}
+                      id="purchaseQty"
+                      aria-invalid={Boolean(purchaseErrors.purchasedQuantity)}
+                      ref={purchaseInput}
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={purchaseQty}
+                      onChange={(e) =>
+                        setPurchaseQty(
+                          e.target.value ? Number(e.target.value) : "",
+                        )
+                      }
+                      className={`shopping-input ${purchaseErrors.purchasedQuantity ? "shopping-input-error" : ""}`}
+                      required
                     />
-                    {purchaseErrors.newExpiryDate && (
-                      <p className="shopping-error-text">
-                        {purchaseErrors.newExpiryDate[0]}
+                    {purchaseErrors.purchasedQuantity && (
+                      <p className="shopping-error-text" role="alert">
+                        {purchaseErrors.purchasedQuantity[0]}
                       </p>
                     )}
                   </div>
+
+                  {purchasingItem.pantryItemId !== null && (
+                    <div className="shopping-form-group shopping-flex-1">
+                      <label htmlFor="purchaseDate">
+                        New expiry date{" "}
+                        {isExpired && <span style={{ color: "red" }}>*</span>}
+                      </label>
+                      <input
+                        id="purchaseDate"
+                        aria-invalid={Boolean(purchaseErrors.newExpiryDate)}
+                        type="date"
+                        value={purchaseDate}
+                        onChange={(e) => setPurchaseDate(e.target.value)}
+                        required={isExpired}
+                        className={`shopping-input ${purchaseErrors.newExpiryDate ? "shopping-input-error" : ""}`}
+                      />
+                      {purchaseErrors.newExpiryDate && (
+                        <p className="shopping-error-text" role="alert">
+                          {purchaseErrors.newExpiryDate[0]}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {purchaseErrors.general && (
+                  <p className="shopping-error-text" role="alert">
+                    {purchaseErrors.general[0]}
+                  </p>
                 )}
-              </div>
 
-              {purchaseErrors.general && (
-                <p className="shopping-error-text">
-                  {purchaseErrors.general[0]}
-                </p>
-              )}
-
-              <div className="shopping-form-actions">
-                <button
-                  type="submit"
-                  disabled={isAnyActionRunning}
-                  className="shopping-btn-primary"
-                >
-                  {isPurchasing ? "Confirming..." : "Confirm purchase"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPurchasingItem(null)}
-                  disabled={isAnyActionRunning}
-                  className="shopping-btn-cancel"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </section>
-        )}
-      </div>
-
-      <section className="shopping-panel">
-        <div className="shopping-panel-header">
-          <h2 className="shopping-panel-title">Purchased history</h2>
-          <p className="shopping-panel-desc">
-            Bought entries stay here with the day they were purchased
-          </p>
-        </div>
-        <div className="shopping-table-scroll" role="region" aria-label="Purchased history" tabIndex={0}>
-        <table className="shopping-table">
-          <thead>
-            <tr>
-              <th>ENTRY</th>
-              <th>BOUGHT</th>
-              <th>CREATED</th>
-              <th>PURCHASED</th>
-            </tr>
-          </thead>
-          <tbody>
-            {purchasedData?.items.map((item) => (
-              <tr key={item.id}>
-                <td className="shopping-cell-bold">{item.name}</td>
-                <td>
-                  {item.purchasedQuantity} {item.unit || ""}
-                </td>
-                <td className="shopping-cell-meta">
-                  {formatDate(item.createdAt)}
-                </td>
-                <td className="shopping-cell-meta">
-                  {item.purchasedAt ? formatDate(item.purchasedAt) : "-"}
-                </td>
-              </tr>
-            ))}
-            {purchasedData?.items.length === 0 && (
-              <tr>
-                <td colSpan={4} className="shopping-empty">
-                  No purchase history.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        </div>
-      </section>
-    </div>
+                <div className="shopping-form-actions">
+                  <button
+                    type="submit"
+                    disabled={isAnyActionRunning}
+                    className="shopping-btn-primary"
+                  >
+                    {isPurchasing ? "Confirming..." : "Confirm purchase"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPurchasingItem(null)}
+                    disabled={isAnyActionRunning}
+                    className="shopping-btn-cancel"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
+        </Modal>
+      )}
+    </section>
   );
 }

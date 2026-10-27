@@ -1,3 +1,4 @@
+import { createAccount, TEST_JWT_SECRET } from '../support/auth-fixtures';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getConnectionToken } from '@nestjs/mongoose';
@@ -6,7 +7,7 @@ import { resolve } from 'path';
 import { ClockService } from '../../src/common/clock/clock.service';
 import { createValidationPipe } from '../../src/common/validation';
 import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
-import type { ApiClient } from '../../../client/src/types';
+import type { AuthClient, ApiClient } from '../../../client/src/types';
 
 // Bundle the real browser modules, replacing only Vite's build-time environment.
 // Requests still travel over HTTP to a real Nest application and isolated MongoDB.
@@ -16,6 +17,8 @@ function loadClient(
   mocks = false,
 ): {
   api: ApiClient;
+  authApi: AuthClient;
+  setAccessToken: (token: string) => void;
   itemApi: ApiClient;
   formatQuantity: (quantity: number, unit: string) => string;
 } {
@@ -23,7 +26,8 @@ function loadClient(
     absWorkingDir: resolve(__dirname, '../../../client'),
     stdin: {
       resolveDir: resolve(__dirname, '../../../client'),
-      contents: `export { api } from './src/services/api-client';
+      contents: `export { api, authApi } from './src/services/api-client';
+      export { setAccessToken } from './src/services/session-storage';
       export { itemApi } from './src/features/items/itemApi';
       export { formatQuantity } from './src/features/items/itemFormat';`,
     },
@@ -52,12 +56,14 @@ describe('Frontend shared client against the live backend', () => {
   let client: ReturnType<typeof loadClient>;
   let categoryId: number;
   const original = {
+    JWT_SECRET: process.env.JWT_SECRET,
     MONGODB_URI: process.env.MONGODB_URI,
     SEED_ON_START: process.env.SEED_ON_START,
   };
 
   beforeAll(async () => {
     process.env.MONGODB_URI = `mongodb://127.0.0.1:27018/byb_test_frontend_${process.pid}?replicaSet=byb-rs`;
+    process.env.JWT_SECRET = TEST_JWT_SECRET;
     process.env.SEED_ON_START = 'true';
     const { AppModule } = await import('../../src/app.module');
     const module = await Test.createTestingModule({ imports: [AppModule] })
@@ -75,6 +81,7 @@ describe('Frontend shared client against the live backend', () => {
     await app.listen(0, '127.0.0.1');
     connection = app.get(getConnectionToken());
     client = loadClient(`${await app.getUrl()}/api`);
+    client.setAccessToken((await createAccount(app, 'admin')).token);
     categoryId = (await client.api.listCategories()).items[0].id;
   });
 
@@ -231,6 +238,14 @@ describe('Frontend shared client against the live backend', () => {
 
   it('shares item and shopping state when mocks are explicitly enabled', async () => {
     const mock = loadClient('/api', true);
+    mock.setAccessToken(
+      (
+        await mock.authApi.login({
+          email: 'admin@example.com',
+          password: 'admin123',
+        })
+      ).accessToken,
+    );
     expect(mock.itemApi).toBe(mock.api);
     const item = await mock.itemApi.createPantryItem({
       name: 'Shared mock item',

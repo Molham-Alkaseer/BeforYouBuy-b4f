@@ -22,6 +22,13 @@ import { pantryStoredQuery } from './pantry-query';
 @Injectable()
 export class PantryService {
   private readonly logger = new Logger(PantryService.name);
+
+  // Verified actor identity is supplied by the authenticated controller.
+  private actorContext(actorId: number): string {
+    return Number.isSafeInteger(actorId) && actorId > 0
+      ? `, actorId=${actorId}`
+      : '';
+  }
   constructor(
     @InjectModel('PantryItem') private readonly items: Model<PantryItem>,
     @InjectModel('Category') private readonly categories: Model<Category>,
@@ -32,11 +39,15 @@ export class PantryService {
     @Inject(PANTRY_WRITES) private readonly writes: HouseholdWrites,
   ) {}
 
-  async findAll(query: FindPantryQueryDto = {}) {
+  async findAll(query: FindPantryQueryDto, householdId: number) {
     const asOfDate = this.clock.today();
     const { filter, sort } = pantryStoredQuery(query, asOfDate);
     const [stored, categories] = await Promise.all([
-      this.items.find(filter).sort(sort).lean().exec(),
+      this.items
+        .find({ ...filter, householdId })
+        .sort(sort)
+        .lean()
+        .exec(),
       this.categories.find().lean().exec(),
     ]);
     const names = new Map(
@@ -51,9 +62,13 @@ export class PantryService {
     return { asOfDate, items, total: items.length };
   }
 
-  private async getStored(id: number, session?: ClientSession) {
+  private async getStored(
+    id: number,
+    householdId: number,
+    session?: ClientSession,
+  ) {
     const item = await this.items
-      .findOne({ id })
+      .findOne({ id, householdId })
       .session(session ?? null)
       .lean()
       .exec();
@@ -75,14 +90,15 @@ export class PantryService {
     return pantryResponse(item, category?.name ?? '', today);
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, householdId: number) {
     const today = this.clock.today();
-    return this.enrich(await this.getStored(id), today);
+    return this.enrich(await this.getStored(id, householdId), today);
   }
 
   private async validateReferences(
     dto: UpdatePantryItemDto,
     session: ClientSession,
+    householdId: number,
     id?: number,
   ) {
     if (
@@ -103,6 +119,7 @@ export class PantryService {
       dto.name !== undefined &&
       (await this.items
         .exists({
+          householdId,
           normalizedName: dto.name.trim().toLowerCase(),
           ...(id === undefined ? {} : { id: { $ne: id } }),
         })
@@ -135,17 +152,18 @@ export class PantryService {
     }
   }
 
-  async create(dto: CreatePantryItemDto) {
+  async create(dto: CreatePantryItemDto, actorId: number, householdId: number) {
     const today = this.clock.today();
     // Allocation is outside retryable work: failed writes may leave gaps, never reuse IDs.
     const id = await this.ids.next('pantry_items');
     const result = await this.nameWrite(() =>
       this.writes.run(async (session) => {
-        await this.validateReferences(dto, session);
+        await this.validateReferences(dto, session, householdId);
         const [item] = await this.items.create(
           [
             {
               id,
+              householdId,
               name: dto.name.trim(),
               normalizedName: dto.name.trim().toLowerCase(),
               categoryId: dto.categoryId,
@@ -160,11 +178,18 @@ export class PantryService {
         return this.enrich(item, today, session);
       }),
     );
-    this.logger.log(`Pantry item created: id=${id}`);
+    this.logger.log(
+      `Pantry item created: id=${id}${this.actorContext(actorId)}`,
+    );
     return result;
   }
 
-  async update(id: number, dto: UpdatePantryItemDto) {
+  async update(
+    id: number,
+    dto: UpdatePantryItemDto,
+    actorId: number,
+    householdId: number,
+  ) {
     if (!Object.keys(dto).length)
       throw pantryError(
         400,
@@ -174,8 +199,8 @@ export class PantryService {
     const today = this.clock.today();
     const result = await this.nameWrite(() =>
       this.writes.run(async (session) => {
-        await this.getStored(id, session);
-        await this.validateReferences(dto, session, id);
+        await this.getStored(id, householdId, session);
+        await this.validateReferences(dto, session, householdId, id);
         const changes: Partial<PantryItem> = {};
         for (const key of [
           'categoryId',
@@ -193,7 +218,7 @@ export class PantryService {
         if (dto.unit !== undefined) changes.unit = dto.unit.trim();
         const item = await this.items
           .findOneAndUpdate(
-            { id },
+            { id, householdId },
             { $set: changes },
             { new: true, runValidators: true, session },
           )
@@ -204,11 +229,18 @@ export class PantryService {
         return this.enrich(item, today, session);
       }),
     );
-    this.logger.log(`Pantry item updated: id=${id}`);
+    this.logger.log(
+      `Pantry item updated: id=${id}${this.actorContext(actorId)}`,
+    );
     return result;
   }
 
-  async use(id: number, quantity: number) {
+  async use(
+    id: number,
+    quantity: number,
+    actorId: number,
+    householdId: number,
+  ) {
     if (!Number.isFinite(quantity) || quantity <= 0) {
       throw pantryError(
         400,
@@ -218,64 +250,86 @@ export class PantryService {
       );
     }
     const today = this.clock.today();
-    const result = await this.writes.run(async (session) => {
-      const current = await this.getStored(id, session);
-      if (quantity > current.quantity) {
-        this.logger.warn(
-          `Pantry use rejected: id=${id}, available=${current.quantity}, requested=${quantity}`,
-        );
-        throw pantryError(
-          400,
-          'INSUFFICIENT_STOCK',
-          `Only ${current.quantity} ${current.unit} of ${current.name} are available.`,
-          {
-            quantity: [
-              `Use no more than the available quantity: ${current.quantity} ${current.unit}.`,
-            ],
-          },
-        );
-      }
-      const remaining = Number((current.quantity - quantity).toPrecision(15));
-      // Compare-and-set also protects against an overlapping direct stock update.
-      const item = await this.items
-        .findOneAndUpdate(
-          { id, quantity: current.quantity },
-          { $set: { quantity: remaining } },
-          { new: true, runValidators: true, session },
-        )
-        .lean()
-        .exec();
-      if (!item)
-        throw new Error(
-          'Shared write boundary failed to isolate the pantry stock update.',
-        );
-      return this.enrich(item, today, session);
-    });
+    let starting: number;
+    const result = await this.writes
+      .run(async (session) => {
+        const current = await this.getStored(id, householdId, session);
+        starting = current.quantity;
+        if (quantity > current.quantity) {
+          throw pantryError(
+            400,
+            'INSUFFICIENT_STOCK',
+            `Only ${current.quantity} ${current.unit} of ${current.name} are available.`,
+            {
+              quantity: [
+                `Use no more than the available quantity: ${current.quantity} ${current.unit}.`,
+              ],
+            },
+          );
+        }
+        const remaining = Number((current.quantity - quantity).toPrecision(15));
+        // Compare-and-set also protects against an overlapping direct stock update.
+        const item = await this.items
+          .findOneAndUpdate(
+            { id, householdId, quantity: current.quantity },
+            { $set: { quantity: remaining } },
+            { new: true, runValidators: true, session },
+          )
+          .lean()
+          .exec();
+        if (!item)
+          throw new Error(
+            'Shared write boundary failed to isolate the pantry stock update.',
+          );
+        return this.enrich(item, today, session);
+      })
+      .catch((error) => {
+        if (error?.getResponse?.()?.code === 'INSUFFICIENT_STOCK') {
+          this.logger.warn(
+            `Pantry use rejected: code=INSUFFICIENT_STOCK, id=${id}${this.actorContext(actorId)}, available=${starting}, requested=${quantity}`,
+          );
+        }
+        throw error;
+      });
     this.logger.log(
-      `Pantry stock used: id=${id}, quantity=${quantity}, remaining=${result.quantity}`,
+      `Pantry stock used: id=${id}${this.actorContext(actorId)}, starting=${starting}, quantity=${quantity}, remaining=${result.quantity}`,
     );
     return result;
   }
 
-  async remove(id: number): Promise<void> {
-    await this.writes.run(async (session) => {
-      const item = await this.getStored(id, session);
-      if (
-        await this.entries
-          .exists({ pantryItemId: id, status: 'Pending' })
-          .session(session)
-          .exec()
-      ) {
-        this.logger.warn(`Pantry deletion blocked by pending entry: id=${id}`);
-        throw pantryError(
-          409,
-          'ITEM_HAS_PENDING_ENTRY',
-          `${item.name} cannot be deleted yet. Remove or purchase its pending shopping entry first.`,
-        );
-      }
-      await this.items.deleteOne({ id }, { session }).exec();
-      // Purchased snapshots are deliberately never updated or deleted.
-    });
-    this.logger.log(`Pantry item deleted: id=${id}`);
+  async remove(
+    id: number,
+    actorId: number,
+    householdId: number,
+  ): Promise<void> {
+    await this.writes
+      .run(async (session) => {
+        const item = await this.getStored(id, householdId, session);
+        if (
+          await this.entries
+            .exists({ householdId, pantryItemId: id, status: 'Pending' })
+            .session(session)
+            .exec()
+        ) {
+          throw pantryError(
+            409,
+            'ITEM_HAS_PENDING_ENTRY',
+            `${item.name} cannot be deleted yet. Remove or purchase its pending shopping entry first.`,
+          );
+        }
+        await this.items.deleteOne({ id, householdId }, { session }).exec();
+        // Purchased snapshots are deliberately never updated or deleted.
+      })
+      .catch((error) => {
+        if (error?.getResponse?.()?.code === 'ITEM_HAS_PENDING_ENTRY') {
+          this.logger.warn(
+            `Pantry deletion blocked: code=ITEM_HAS_PENDING_ENTRY, id=${id}${this.actorContext(actorId)}`,
+          );
+        }
+        throw error;
+      });
+    this.logger.log(
+      `Pantry item deleted: id=${id}${this.actorContext(actorId)}`,
+    );
   }
 }

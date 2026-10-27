@@ -16,6 +16,8 @@ export class ShoppingEntry {
     validate: Number.isSafeInteger,
   })
   id: number;
+  @Prop({ required: true, min: 1, validate: Number.isSafeInteger })
+  householdId: number;
   @Prop({ required: true, trim: true }) name: string;
   @Prop({ required: true }) normalizedName: string;
   @Prop({ required: true, min: Number.MIN_VALUE, validate: Number.isFinite })
@@ -37,7 +39,7 @@ export class ShoppingEntry {
 export type ShoppingEntryDocument = HydratedDocument<ShoppingEntry>;
 export const ShoppingEntrySchema = SchemaFactory.createForClass(ShoppingEntry);
 ShoppingEntrySchema.index(
-  { normalizedName: 1 },
+  { householdId: 1, normalizedName: 1 },
   { unique: true, partialFilterExpression: { status: 'Pending' } },
 );
 ShoppingEntrySchema.index(

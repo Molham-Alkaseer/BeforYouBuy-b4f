@@ -1,9 +1,10 @@
 import { DatabaseModule } from '../database/database.module';
+import { AuthModule } from '../auth/auth.module';
 import { DynamicModule, Module, ModuleMetadata } from '@nestjs/common';
 import { PantryController } from './pantry.controller';
 import { PantryService } from './pantry.service';
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, AuthModule],
   controllers: [PantryController],
   providers: [PantryService],
   exports: [PantryService],

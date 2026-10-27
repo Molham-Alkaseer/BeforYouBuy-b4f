@@ -1,4 +1,4 @@
-import { request } from '../api';
+import { request } from './request';
 import {
   ApiClient,
   CategoryList,
@@ -15,7 +15,6 @@ import {
   ShoppingList,
   ShoppingQuery,
 } from '../types';
-
 
 function buildQueryString(params?: Record<string, unknown>): string {
   if (!params) return '';
