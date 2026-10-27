@@ -36,7 +36,7 @@ The `authApi` export provides register, login, me, listMembers and addMember end
 ```typescript
 import { authApi } from "../services/api-client";
 
-// Register (does not sign in automatically)
+// Transport only: creates an account without changing session state.
 const registeredUser = await authApi.register({ name: "Demo", email: "a@b.com", password: "secret123" });
 
 // Transport only: returns accessToken + user; it does not mutate session state.
@@ -46,6 +46,11 @@ const { accessToken, user } = await authApi.login({ email: "a@b.com", password: 
 // which awaits authApi.login, stores accessToken, and publishes SafeUser:
 import { login } from "../features/session/session-store";
 await login({ email: "a@b.com", password: "secret123" });
+
+// The registration screen uses this action to create an account and sign in
+// automatically, then redirects to its safe returnTo path (default: /pantry).
+import { register } from "../features/session/session-store";
+await register({ name: "New user", email: "new@b.com", password: "secret123" });
 
 // Get current user (requires valid session)
 const currentUser = await authApi.me();

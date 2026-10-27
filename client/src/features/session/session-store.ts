@@ -1,6 +1,6 @@
 import { authApi } from '../../services/auth-api';
 import { clearAccessToken, getAccessToken, setAccessToken, subscribeToken } from '../../services/session-storage';
-import { ApiError, type LoginInput, type SafeUser } from '../../types';
+import { ApiError, type LoginInput, type RegisterInput, type SafeUser } from '../../types';
 
 export type AuthStatus = 'checking' | 'anonymous' | 'authenticated';
 export interface SessionState { status: AuthStatus; user: SafeUser | null; error: string | null }
@@ -39,4 +39,19 @@ export async function login(input: LoginInput): Promise<void> {
   update({ status: 'authenticated', user: result.user, error: null });
 }
 export function logout(): void { epoch++; clearAccessToken(); }
-export const register = authApi.register;
+export async function register(input: RegisterInput): Promise<void> {
+  const run = ++epoch;
+  await authApi.register(input);
+  if (run !== epoch) throw new ApiError({ statusCode: 0, code: 'SESSION_CHANGED', message: 'The session changed. Please sign in again.', fieldErrors: {} });
+  try {
+    await login({ email: input.email, password: input.password });
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'SESSION_CHANGED') throw error;
+    throw new ApiError({
+      statusCode: error instanceof ApiError ? error.statusCode : 0,
+      code: 'REGISTRATION_LOGIN_FAILED',
+      message: 'Your account was created, but automatic sign-in failed. Please use the Sign in link below to access your account.',
+      fieldErrors: {},
+    });
+  }
+}

@@ -7,7 +7,7 @@ import './auth-forms.css';
 
 interface RegisterScreenProps {
   status: AuthStatus;
-  onRegister: (input: RegisterValues) => Promise<unknown>;
+  onRegister: (input: RegisterValues) => Promise<void>;
 }
 
 export default function RegisterScreen({

@@ -8,8 +8,8 @@ import type { FieldErrors, RegisterValues } from './authTypes';
 import './auth-forms.css';
 
 interface RegisterFormProps {
-  // Uses the shared auth adapter; registration does not create a session.
-  onRegister: (input: RegisterValues) => Promise<unknown>;
+  // Creates the account and signs in; the screen redirects once authenticated.
+  onRegister: (input: RegisterValues) => Promise<void>;
   // Where the "Sign in" links go. The page decides it, including a safe returnTo.
   loginPath: string;
 }
@@ -24,7 +24,6 @@ export default function RegisterForm({
   const [errors, setErrors] = useState<FieldErrors<RegisterValues>>({});
   const [summary, setSummary] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
 
   // Stops a late answer from changing the screen after the user left it.
   const isMounted = useRef(true);
@@ -83,7 +82,6 @@ export default function RegisterForm({
       if (!isMounted.current) {
         return;
       }
-      setRegisteredEmail(input.email);
       setValues(emptyValues); // clears the password too
     } catch (caught) {
       if (!isMounted.current) {
@@ -106,21 +104,6 @@ export default function RegisterForm({
         setIsSubmitting(false);
       }
     }
-  }
-
-  if (registeredEmail !== null) {
-    return (
-      <div className="auth-form">
-        <p role="status" className="auth-success">
-          Your account was created. Please sign in to continue.
-        </p>
-        <p className="auth-links">
-          <Link to={loginPath} state={{ email: registeredEmail }}>
-            Go to sign in
-          </Link>
-        </p>
-      </div>
-    );
   }
 
   return (
